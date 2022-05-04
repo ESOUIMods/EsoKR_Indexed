@@ -177,5 +177,57 @@ def esoToKorean(txtFilename):
             if not carriageReturn and not lineFeed:
                 print(outText)
 
+@mainFunction
+def addIndexToEosui(txtFilename):
+    """Generates a text file from two text files one containing ID numbers and one containing text."""
+    reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"')
+    reFontTag = re.compile(r'^\[Font:(.+?)')
+
+    textLines = []
+    # Get ID numbers ------------------------------------------------------
+    textIns = open(txtFilename, 'r', encoding="utf8")
+    for line in textIns:
+        maFontTag = reFontTag.match(line)
+        maConstantIndex = reConstantTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        conIndex = ""
+        conText = ""
+        if maFontTag:
+            textLines.append(line)
+        if maConstantIndex or maConstantText and not maFontTag:
+            if maConstantIndex:
+                conIndex = maConstantIndex.group(1)
+            if maConstantIndex:
+                conText = maConstantText.group(2)
+            lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, conIndex, conText)
+            textLines.append(lineOut)
+
+    textIns.close()
+    # --Write Output ------------------------------------------------------
+    out = open("output.txt", 'w', encoding="utf8")
+    for i in range(len(textLines)):
+        lineOut = textLines[i]
+        out.write(lineOut)
+    out.close()
+
+
+@mainFunction
+def removeIndexFromEosui(txtFilename, idFilename):
+    """Generates a text file from two text files one containing ID numbers and one containing text."""
+    textLines = []
+    # Get ID numbers ------------------------------------------------------
+    textIns = open(txtFilename, 'r', encoding="utf8")
+    for line in textIns:
+        newstr = line.rstrip()
+        textLines.append(newstr)
+    textIns.close()
+    # --Write Output ------------------------------------------------------
+    out = open("output.txt", 'w', encoding="utf8")
+    for i in range(len(textLines)):
+        lineOut = textLines[i]
+        out.write(lineOut)
+    out.close()
+
+
 if __name__ == '__main__':
         callables.main()
