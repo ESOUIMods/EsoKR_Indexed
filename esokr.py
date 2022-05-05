@@ -246,8 +246,10 @@ def esoToKorean(txtFilename):
 @mainFunction
 def addIndexToEosui(txtFilename):
     """Generates a text file from two text files one containing ID numbers and one containing text."""
-    reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"')
+    reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
     reFontTag = re.compile(r'^\[Font:(.+?)')
+    reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
+    reConstantTagEscaped = re.compile(r'^\[(.+?)\] = ("|\")(.+?)("|\")')
 
     textLines = []
     # Get ID numbers ------------------------------------------------------
@@ -256,18 +258,22 @@ def addIndexToEosui(txtFilename):
         maFontTag = reFontTag.match(line)
         maConstantIndex = reConstantTag.match(line)
         maConstantText = reConstantTag.match(line)
+        maEmptyLine = reEmptyLine.match(line)
         conIndex = ""
         conText = ""
+        if maEmptyLine:
+            textLines.append(line)
+            continue
         if maFontTag:
             textLines.append(line)
-        if maConstantIndex or maConstantText and not maFontTag:
+            continue
+        if maConstantIndex or maConstantText:
             if maConstantIndex:
                 conIndex = maConstantIndex.group(1)
-            if maConstantIndex:
+            if maConstantText:
                 conText = maConstantText.group(2)
             lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, conIndex, conText)
             textLines.append(lineOut)
-
     textIns.close()
     # --Write Output ------------------------------------------------------
     out = open("output.txt", 'w', encoding="utf8")
@@ -278,14 +284,35 @@ def addIndexToEosui(txtFilename):
 
 
 @mainFunction
-def removeIndexFromEosui(txtFilename, idFilename):
+def removeIndexFromEosui(txtFilename):
     """Generates a text file from two text files one containing ID numbers and one containing text."""
+    reConstantTag = re.compile(r'^\[(.+?)\] = "\{(.+?)\}(.+?)"$')
+    reConstantTagEscaped = re.compile(r'^\[(.+?)\] = "\{(.+?)\}(.+?)"')
+    reFontTag = re.compile(r'^\[Font:(.+?)')
+    reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
+
     textLines = []
     # Get ID numbers ------------------------------------------------------
     textIns = open(txtFilename, 'r', encoding="utf8")
     for line in textIns:
-        newstr = line.rstrip()
-        textLines.append(newstr)
+        maFontTag = reFontTag.match(line)
+        maConstantIndex = reConstantTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        maEmptyLine = reEmptyLine.match(line)
+        conIndex = ""
+        conText = ""
+        if maEmptyLine:
+            textLines.append(line)
+            continue
+        if maFontTag:
+            textLines.append(line)
+        if maConstantIndex or maConstantText and not maFontTag:
+            if maConstantIndex:
+                conIndex = maConstantIndex.group(1)
+            if maConstantText:
+                conText = maConstantText.group(3)
+            lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
+            textLines.append(lineOut)
     textIns.close()
     # --Write Output ------------------------------------------------------
     out = open("output.txt", 'w', encoding="utf8")
