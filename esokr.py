@@ -322,5 +322,77 @@ def removeIndexFromEosui(txtFilename):
     out.close()
 
 
+@mainFunction
+def mergeIndexedText(oldFilename, newFilename):
+    """Generates a text file from two text files one containing ID numbers and one containing text."""
+    reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
+    reConstantTagEscaped = re.compile(r'^\[(.+?)\] = "\{(.+?)\}(.+?)"')
+    reFontTag = re.compile(r'^\[Font:(.+?)')
+    reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
+
+    textTranslatedDict = { }
+    textUntranslatedDict = { }
+    # Get ID numbers ------------------------------------------------------
+    textIns = open(oldFilename, 'r', encoding="utf8")
+    for line in textIns:
+        maFontTag = reFontTag.match(line)
+        maConstantIndex = reConstantTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        maEmptyLine = reEmptyLine.match(line)
+        conIndex = ""
+        conText = ""
+        if maEmptyLine:
+            continue
+        if maFontTag:
+            continue
+        if maConstantIndex or maConstantText and not maFontTag:
+            if maConstantIndex:
+                conIndex = maConstantIndex.group(1)
+            if maConstantText:
+                conText = maConstantText.group(2)
+                newString = conText.replace(conIndex + " ", "")
+            textTranslatedDict[conIndex] = newString
+    textIns.close()
+    textIns = open(newFilename, 'r', encoding="utf8")
+    for line in textIns:
+        maFontTag = reFontTag.match(line)
+        maConstantIndex = reConstantTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        maEmptyLine = reEmptyLine.match(line)
+        conIndex = ""
+        conText = ""
+        if maEmptyLine:
+            continue
+        if maFontTag:
+            continue
+        if maConstantIndex or maConstantText and not maFontTag:
+            if maConstantIndex:
+                conIndex = maConstantIndex.group(1)
+            if maConstantText:
+                conText = maConstantText.group(2)
+                newString = conText.replace(conIndex + " ", "")
+            textUntranslatedDict[conIndex] = newString
+    textIns.close()
+    # --Write Output ------------------------------------------------------
+    out = open("output.txt", 'w', encoding="utf8")
+    for key in textUntranslatedDict:
+        conIndex = key
+        conText = None
+        if textTranslatedDict.get(conIndex) is not None:
+            conText = textTranslatedDict[key]
+        if not conText:
+            conText = textUntranslatedDict[key]
+        lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, conIndex, conText)
+        out.write(lineOut)
+    out.close()
+
+    """
+    for i in range(len(textLines)):
+        lineOut = textLines[i]
+        out.write(lineOut)
+    out.close()
+    """
+
+
 if __name__ == '__main__':
         callables.main()
