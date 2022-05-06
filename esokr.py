@@ -320,7 +320,7 @@ def removeIndexFromEosui(txtFilename):
 
 
 @mainFunction
-def mergeIndexedText(oldFilename, newFilename):
+def mergeIndexedText(translatedFilename, unTranslatedFilename):
     """Merges either kb_client.str or kb_pregame.str with en_client.lua or en_pregame.lua, when there is a patch."""
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
     reConstantTagEscaped = re.compile(r'^\[(.+?)\] = "\{(.+?)\}(.+?)"')
@@ -330,7 +330,7 @@ def mergeIndexedText(oldFilename, newFilename):
     textTranslatedDict = { }
     textUntranslatedDict = { }
     # Get ID numbers ------------------------------------------------------
-    textIns = open(oldFilename, 'r', encoding="utf8")
+    textIns = open(translatedFilename, 'r', encoding="utf8")
     for line in textIns:
         maFontTag = reFontTag.match(line)
         maConstantIndex = reConstantTag.match(line)
@@ -350,7 +350,7 @@ def mergeIndexedText(oldFilename, newFilename):
                 newString = conText.replace(conIndex + " ", "")
             textTranslatedDict[conIndex] = newString
     textIns.close()
-    textIns = open(newFilename, 'r', encoding="utf8")
+    textIns = open(unTranslatedFilename, 'r', encoding="utf8")
     for line in textIns:
         maFontTag = reFontTag.match(line)
         maConstantIndex = reConstantTag.match(line)
