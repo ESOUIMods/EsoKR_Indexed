@@ -99,7 +99,7 @@ def mainFunction(func):
 # (txtFilename, idFilename)
 @mainFunction
 def addIdToFile(txtFilename, idFilename):
-    """Generates a text file from two text files one containing ID numbers and one containing text."""
+    """Add tag to kr.lang files for use with translation files."""
     textLines = []
     idLines = []
     # Get ID numbers ------------------------------------------------------
@@ -117,13 +117,13 @@ def addIdToFile(txtFilename, idFilename):
     # --Write Output ------------------------------------------------------
     out = open("output.txt", 'w', encoding="utf8")
     for i in range(len(textLines)):
-        lineOut = '{{{{{}:}}}}{}\r\n'.format(idLines[i], textLines[i])
+        lineOut = '{{{{{}:}}}}{}\n'.format(idLines[i], textLines[i])
         out.write(lineOut)
     out.close()
 
 @mainFunction
 def removeIdFromFile(txtFilename):
-    """Generates a text file from two text files one containing ID numbers and one containing text."""
+    """Remove tag from kr.lang files for use with official release."""
     reHead = re.compile(r'^\{\{(.+):\}\}(.+)')
     def identifier(maObject):
         identifier_line = maObject.group(1).strip()
@@ -149,6 +149,7 @@ def removeIdFromFile(txtFilename):
 
 @mainFunction
 def koreanToEso(txtFilename):
+    """Shift text Korean UTF8 to Chinese UTF8."""
     not_eof = True
     out = open("output.txt", 'w', encoding="utf8")
     with open(txtFilename, 'rb') as textIns:
@@ -197,6 +198,7 @@ def koreanToEso(txtFilename):
 
 @mainFunction
 def esoToKorean(txtFilename):
+    """Shift text from Chinese UTF8 to Korean UTF8."""
     not_eof = True
     out = open("output.txt", 'w', encoding="utf8")
     with open(txtFilename, 'rb') as textIns:
@@ -245,7 +247,7 @@ def esoToKorean(txtFilename):
 
 @mainFunction
 def addIndexToEosui(txtFilename):
-    """Generates a text file from two text files one containing ID numbers and one containing text."""
+    """Add tags to either kr_client.str or kr_pregame.str for use with translation files."""
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
     reFontTag = re.compile(r'^\[Font:(.+?)')
     reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
@@ -285,7 +287,7 @@ def addIndexToEosui(txtFilename):
 
 @mainFunction
 def removeIndexFromEosui(txtFilename):
-    """Generates a text file from two text files one containing ID numbers and one containing text."""
+    """Remove tags from either kr_client.str or kr_pregame.str for use with official release."""
     reConstantTag = re.compile(r'^\[(.+?)\] = "\{(.+?)\}(.+?)"$')
     reConstantTagEscaped = re.compile(r'^\[(.+?)\] = "\{(.+?)\}(.+?)"')
     reFontTag = re.compile(r'^\[Font:(.+?)')
@@ -324,7 +326,7 @@ def removeIndexFromEosui(txtFilename):
 
 @mainFunction
 def mergeIndexedText(oldFilename, newFilename):
-    """Generates a text file from two text files one containing ID numbers and one containing text."""
+    """Merges either kb_client.str or kb_pregame.str with en_client.lua or en_pregame.lua, when there is a patch."""
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
     reConstantTagEscaped = re.compile(r'^\[(.+?)\] = "\{(.+?)\}(.+?)"')
     reFontTag = re.compile(r'^\[Font:(.+?)')
@@ -386,12 +388,63 @@ def mergeIndexedText(oldFilename, newFilename):
         out.write(lineOut)
     out.close()
 
-    """
-    for i in range(len(textLines)):
-        lineOut = textLines[i]
+
+@mainFunction
+def mergeIndexedLangText(translatedFilename, unTranslatedFilename):
+    """Merges en.lang with kr.lang."""
+    reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
+
+    def isTranslatedText(line):
+        for char in range(0, len(line)):
+            returnedBytes = bytes(line[char], 'utf-8')
+            length = len(returnedBytes)
+            if length > 1: return True
+        return None
+
+    textTranslatedDict = { }
+    textUntranslatedDict = { }
+    # Get ID numbers ------------------------------------------------------
+    textIns = open(translatedFilename, 'r', encoding="utf8")
+    for line in textIns:
+        maConstantIndex = reConstantTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        conIndex = ""
+        conText = None
+        if maConstantIndex or maConstantText:
+            if maConstantIndex:
+                conIndex = maConstantIndex.group(1)
+            if maConstantText:
+                conText = maConstantText.group(2)
+                newString = conText.replace(conIndex + " ", "")
+            textTranslatedDict[conIndex] = newString
+    textIns.close()
+    textIns = open(unTranslatedFilename, 'r', encoding="utf8")
+    for line in textIns:
+        maConstantIndex = reConstantTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        conIndex = ""
+        conText = None
+        if maConstantIndex or maConstantText:
+            if maConstantIndex:
+                conIndex = maConstantIndex.group(1)
+            if maConstantText:
+                conText = maConstantText.group(2)
+                newString = conText.replace(conIndex + " ", "")
+            textUntranslatedDict[conIndex] = newString
+    textIns.close()
+    # --Write Output ------------------------------------------------------
+    out = open("output.txt", 'w', encoding="utf8")
+    for key in textUntranslatedDict:
+        conIndex = key
+        conText = None
+        if textTranslatedDict.get(conIndex) is not None:
+            if isTranslatedText(textTranslatedDict.get(conIndex)):
+                conText = textTranslatedDict[key]
+        if not conText:
+            conText = textUntranslatedDict[key]
+        lineOut = '{{{{{}:}}}}{}\n'.format(conIndex, conText)
         out.write(lineOut)
     out.close()
-    """
 
 
 if __name__ == '__main__':
