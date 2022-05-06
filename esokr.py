@@ -125,11 +125,6 @@ def addIdToFile(txtFilename, idFilename):
 def removeIdFromFile(txtFilename):
     """Remove tag from kr.lang files for use with official release."""
     reHead = re.compile(r'^\{\{(.+):\}\}(.+)')
-    def identifier(maObject):
-        identifier_line = maObject.group(1).strip()
-        if ':' in identifier_line:
-            (text_id, the_text) = [chunk.strip() for chunk in identifier_line.split(':', 1)]
-        return '{}'.format(the_text)
 
     # Get ID numbers ------------------------------------------------------
     textLines = []
