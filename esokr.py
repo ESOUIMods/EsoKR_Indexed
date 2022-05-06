@@ -250,8 +250,15 @@ def addIndexToEosui(txtFilename):
 
     textLines = []
     # Get ID numbers ------------------------------------------------------
+    indexPrefix = ""
+    indexCount = 0
+    if re.search('client', txtFilename):
+        indexPrefix = "C:"
+    if re.search('pregame', txtFilename):
+        indexPrefix = "P:"
     textIns = open(txtFilename, 'r', encoding="utf8")
     for line in textIns:
+        indexCount = indexCount + 1
         maFontTag = reFontTag.match(line)
         maConstantIndex = reConstantTag.match(line)
         maConstantText = reConstantTag.match(line)
@@ -269,7 +276,7 @@ def addIndexToEosui(txtFilename):
                 conIndex = maConstantIndex.group(1)
             if maConstantText:
                 conText = maConstantText.group(2)
-            lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, conIndex, conText)
+            lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, indexPrefix + str(indexCount), conText)
             textLines.append(lineOut)
     textIns.close()
     # --Write Output ------------------------------------------------------
@@ -283,8 +290,7 @@ def addIndexToEosui(txtFilename):
 @mainFunction
 def removeIndexFromEosui(txtFilename):
     """Remove tags from either kr_client.str or kr_pregame.str for use with official release."""
-    reConstantTag = re.compile(r'^\[(.+?)\] = "\{(.+?)\}(.+?)"$')
-    reConstantTagEscaped = re.compile(r'^\[(.+?)\] = "\{(.+?)\}(.+?)"')
+    reConstantTag = re.compile(r'^\[(.+?)\] = "(\{(C|P):(.+?)\})(.+?)"$')
     reFontTag = re.compile(r'^\[Font:(.+?)')
     reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
 
@@ -307,7 +313,7 @@ def removeIndexFromEosui(txtFilename):
             if maConstantIndex:
                 conIndex = maConstantIndex.group(1)
             if maConstantText:
-                conText = maConstantText.group(3)
+                conText = maConstantText.group(5)
             lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
             textLines.append(lineOut)
     textIns.close()
