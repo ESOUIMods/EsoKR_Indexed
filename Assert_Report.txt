@@ -1,0 +1,10 @@
+[SI_KEYBINDINGS_LAYER_GENERAL] = "{C:6013}襼縘"
+[SI_KEYBINDINGS_GENERIC_CATEGORY_NAME] = "襼縘"
+[SI_KEYBINDINGS_CATEGORY_GENERAL] = "襼縘"
+
+assert: Assertion failed!
+|rstack traceback:
+[C]: in function 'assert'
+/EsoUI/PregameAndIngame/ZO_Options/Gamepad/ZO_Options_Gamepad.lua:688: in function 'ZO_GamepadOptions:RefreshGamepadInfoPanel'
+|caaaaaa<Locals> self = [table:1]{addListTriggerKeybinds = F, settingsNeedApply = F, currentCategory = -1, updateCooldownMS = 0, dirty = T, activateOnShow = F, isGamepadOptions = T}, control = ud, backKeyCode = 128, mostRecentGamepadType = 1, generalLayer = "襼縘", isChordedKeySetupMap = [table:2]{161 = T}, key = 165, isSetup = F </Locals>|r
+/EsoUI/PregameAndIngame/ZO_Options/Gamepad/ZO_Options_Gamepad.lua:43: in function '(anonymous)'
