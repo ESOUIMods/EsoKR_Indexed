@@ -98,8 +98,8 @@ def mainFunction(func):
 # Conversion ------------------------------------------------------------------
 # (txtFilename, idFilename)
 @mainFunction
-def addIdToFile(txtFilename, idFilename):
-    """Add tag to kr.lang files for use with translation files."""
+def addIndexToLangFile(txtFilename, idFilename):
+    """Add tag from either kb.lang or kr.lang files for use with translation files."""
     textLines = []
     idLines = []
     # Get ID numbers ------------------------------------------------------
@@ -122,8 +122,8 @@ def addIdToFile(txtFilename, idFilename):
     out.close()
 
 @mainFunction
-def removeIdFromFile(txtFilename):
-    """Remove tag from kr.lang files for use with official release."""
+def removeIndexToLangFile(txtFilename):
+    """Remove tag from either kb.lang or kr.lang files for use with official release."""
     reIndex = re.compile(r'^\{\{(.+):\}\}(.+)$')
     reIndexOld = re.compile(r'^(\d{1,10}-\d{1,5}-\d{1,5})(.+)$')
 
@@ -347,8 +347,12 @@ def removeIndexFromEosui(txtFilename):
 
 
 @mainFunction
-def mergeIndexedText(translatedFilename, unTranslatedFilename):
-    """Merges either kb_client.str or kb_pregame.str with en_client.lua or en_pregame.lua, when there is a patch."""
+def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
+    """Merges either kb_client.str or kb_pregame.str with updated translations for current live server files.
+    replaced with: diffEsouiText()
+    Untested, previously attempted to merge en_client.str and kb_client.str
+    """
+
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
     reFontTag = re.compile(r'^\[Font:(.+?)')
     reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
@@ -413,8 +417,11 @@ def mergeIndexedText(translatedFilename, unTranslatedFilename):
 
 
 @mainFunction
-def mergeIndexedLangText(translatedFilename, unTranslatedFilename):
-    """Merges en.lang with kr.lang."""
+def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
+    """Merges either kb.lang or kr.lang with updated translations for current live server files.
+    replaced with: diffIndexedLangText()
+    Untested, previously attempted to merge en.lang with kr.lang.
+    """
     reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
 
     def isTranslatedText(line):
@@ -470,7 +477,7 @@ def mergeIndexedLangText(translatedFilename, unTranslatedFilename):
 
 @mainFunction
 def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslatedPTSFilename):
-    """Merges en.lang with kr.lang."""
+    """Read live and pts en.lang, if text is unchanged use existing translation."""
     reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
 
     def isTranslatedText(line):
@@ -544,6 +551,96 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
                 outText = textUntranslatedPTSDict.get(key)
                 outIndex = key
         lineOut = '{{{{{}:}}}}{}\n'.format(outIndex, outText)
+        out.write(lineOut)
+    out.close()
+
+
+@mainFunction
+def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
+    """Reads live and pts en_client.str and if text is the same uses existing translation."""
+    reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
+    reFontTag = re.compile(r'^\[Font:(.+?)')
+    reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
+
+    textTranslatedDict = { }
+    liveUntranslatedDict = { }
+    ptsUntranslatedDict = { }
+    # Read translated text ----------------------------------------------------
+    textIns = open(translatedFilename, 'r', encoding="utf8")
+    for line in textIns:
+        line = line.rstrip()
+        maFontTag = reFontTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        maEmptyLine = reEmptyLine.match(line)
+        if maEmptyLine:
+            conIndex = maEmptyLine.group(1)
+            conText = maEmptyLine.group(2)
+            textTranslatedDict[conIndex] = conText
+            continue
+        if maFontTag:
+            continue
+        if maConstantText and not maEmptyLine and not maFontTag:
+            conIndex = maConstantText.group(1)
+            conText = maConstantText.group(2)
+            # newString = conText.replace(conIndex + " ", "")
+            textTranslatedDict[conIndex] = conText
+    textIns.close()
+    # Read live text ----------------------------------------------------
+    textIns = open(liveFilename, 'r', encoding="utf8")
+    for line in textIns:
+        line = line.rstrip()
+        maFontTag = reFontTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        maEmptyLine = reEmptyLine.match(line)
+        if maEmptyLine:
+            conIndex = maEmptyLine.group(1)
+            conText = maEmptyLine.group(2)
+            liveUntranslatedDict[conIndex] = conText
+            continue
+        if maFontTag:
+            continue
+        if maConstantText and not maEmptyLine and not maFontTag:
+            conIndex = maConstantText.group(1)
+            conText = maConstantText.group(2)
+            # newString = conText.replace(conIndex + " ", "")
+            liveUntranslatedDict[conIndex] = conText
+    textIns.close()
+    # Read pts text ----------------------------------------------------
+    textIns = open(ptsFilename, 'r', encoding="utf8")
+    for line in textIns:
+        line = line.rstrip()
+        maFontTag = reFontTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        maEmptyLine = reEmptyLine.match(line)
+        if maEmptyLine:
+            conIndex = maEmptyLine.group(1)
+            conText = maEmptyLine.group(2)
+            ptsUntranslatedDict[conIndex] = conText
+            continue
+        if maFontTag:
+            continue
+        if maConstantText and not maEmptyLine and not maFontTag:
+            conIndex = maConstantText.group(1)
+            conText = maConstantText.group(2)
+            # newString = conText.replace(conIndex + " ", "")
+            ptsUntranslatedDict[conIndex] = conText
+    textIns.close()
+    # --Write Output ------------------------------------------------------
+    out = open("output.txt", 'w', encoding="utf8")
+    for key in ptsUntranslatedDict:
+        ptsText = ptsUntranslatedDict.get(key)
+        liveText = liveUntranslatedDict.get(key)
+        conText = None
+        if liveUntranslatedDict.get(key) is None:
+            conText = ptsUntranslatedDict[key]
+            lineOut = '[{}] = "{}"\n'.format(key, conText)
+            out.write(lineOut)
+            continue
+        if ptsText == liveText:
+            conText = textTranslatedDict[key]
+        else:
+            conText = ptsUntranslatedDict[key]
+        lineOut = '[{}] = "{}"\n'.format(key, conText)
         out.write(lineOut)
     out.close()
 
