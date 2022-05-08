@@ -245,8 +245,7 @@ def addIndexToEosui(txtFilename):
     """Add tags to either kr_client.str or kr_pregame.str for use with translation files."""
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
     reFontTag = re.compile(r'^\[Font:(.+?)')
-    reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
-    reConstantTagEscaped = re.compile(r'^\[(.+?)\] = ("|\")(.+?)("|\")')
+    reEmptyLine = re.compile(r'^\[(.+?)\] = ""')
 
     textLines = []
     # Get ID numbers ------------------------------------------------------
@@ -258,7 +257,6 @@ def addIndexToEosui(txtFilename):
         indexPrefix = "P:"
     textIns = open(txtFilename, 'r', encoding="utf8")
     for line in textIns:
-        indexCount = indexCount + 1
         maFontTag = reFontTag.match(line)
         maConstantIndex = reConstantTag.match(line)
         maConstantText = reConstantTag.match(line)
@@ -272,6 +270,7 @@ def addIndexToEosui(txtFilename):
             textLines.append(line)
             continue
         if maConstantIndex or maConstantText:
+            indexCount = indexCount + 1
             if maConstantIndex:
                 conIndex = maConstantIndex.group(1)
             if maConstantText:
@@ -290,7 +289,9 @@ def addIndexToEosui(txtFilename):
 @mainFunction
 def removeIndexFromEosui(txtFilename):
     """Remove tags from either kr_client.str or kr_pregame.str for use with official release."""
-    reConstantTag = re.compile(r'^\[(.+?)\] = "(\{(C|P):(.+?)\})(.+?)"$')
+    reConstantTagNew = re.compile(r'^\[(.+?)\] = "(\{(C|P):(.+?)\})(.+?)"$')
+    reConstantTagOld = re.compile(r'^\[(.+?)\] = "(\{[^CP].+?\})(.+?)"$')
+    reConstantTagOlder = re.compile(r'^\[(.+?)\] = "([^CP\{\}].+?)"$')
     reFontTag = re.compile(r'^\[Font:(.+?)')
     reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
 
@@ -298,22 +299,33 @@ def removeIndexFromEosui(txtFilename):
     # Get ID numbers ------------------------------------------------------
     textIns = open(txtFilename, 'r', encoding="utf8")
     for line in textIns:
+        line = line.rstrip()
         maFontTag = reFontTag.match(line)
-        maConstantIndex = reConstantTag.match(line)
-        maConstantText = reConstantTag.match(line)
+        maConstantTagNew = reConstantTagNew.match(line)
+        maConstantTagOld = reConstantTagOld.match(line)
+        maConstantTagOlder = reConstantTagOlder.match(line)
         maEmptyLine = reEmptyLine.match(line)
         conIndex = ""
         conText = ""
         if maEmptyLine:
-            textLines.append(line)
+            textLines.append(line + "\n")
             continue
         if maFontTag:
-            textLines.append(line)
-        if maConstantIndex or maConstantText and not maFontTag:
-            if maConstantIndex:
-                conIndex = maConstantIndex.group(1)
-            if maConstantText:
-                conText = maConstantText.group(5)
+            textLines.append(line + "\n")
+        if maConstantTagOlder and not maFontTag:
+            conIndex = maConstantTagOlder.group(1)
+            conText = maConstantTagOlder.group(2)
+            newString = conText.replace(conIndex + " ", "")
+            lineOut = '[{}] = "{}"\n'.format(conIndex, newString)
+            textLines.append(lineOut)
+        if maConstantTagOld and not maFontTag:
+            conIndex = maConstantTagOld.group(1)
+            conText = maConstantTagOld.group(3)
+            lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
+            textLines.append(lineOut)
+        if maConstantTagNew and not maFontTag:
+            conIndex = maConstantTagNew.group(1)
+            conText = maConstantTagNew.group(5)
             lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
             textLines.append(lineOut)
     textIns.close()
@@ -329,7 +341,6 @@ def removeIndexFromEosui(txtFilename):
 def mergeIndexedText(translatedFilename, unTranslatedFilename):
     """Merges either kb_client.str or kb_pregame.str with en_client.lua or en_pregame.lua, when there is a patch."""
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
-    reConstantTagEscaped = re.compile(r'^\[(.+?)\] = "\{(.+?)\}(.+?)"')
     reFontTag = re.compile(r'^\[Font:(.+?)')
     reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
 
@@ -338,6 +349,7 @@ def mergeIndexedText(translatedFilename, unTranslatedFilename):
     # Get ID numbers ------------------------------------------------------
     textIns = open(translatedFilename, 'r', encoding="utf8")
     for line in textIns:
+        line = line.rstrip()
         maFontTag = reFontTag.match(line)
         maConstantIndex = reConstantTag.match(line)
         maConstantText = reConstantTag.match(line)
@@ -358,6 +370,7 @@ def mergeIndexedText(translatedFilename, unTranslatedFilename):
     textIns.close()
     textIns = open(unTranslatedFilename, 'r', encoding="utf8")
     for line in textIns:
+        line = line.rstrip()
         maFontTag = reFontTag.match(line)
         maConstantIndex = reConstantTag.match(line)
         maConstantText = reConstantTag.match(line)
@@ -385,7 +398,7 @@ def mergeIndexedText(translatedFilename, unTranslatedFilename):
             conText = textTranslatedDict[key]
         if not conText:
             conText = textUntranslatedDict[key]
-        lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, conIndex, conText)
+        lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
         out.write(lineOut)
     out.close()
 
