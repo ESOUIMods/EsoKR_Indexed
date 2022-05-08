@@ -589,34 +589,20 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     # Compare PTS with Live text, write output -----------------------------------------
     matchedLines = []
     misMatchedLines = []
+    count = 0
+    out = open("output.txt", 'w', encoding="utf8")
     for key in textUntranslatedPTSDict:
-        liveText = None
-        ptsText = None
-        outText = None
-        outIndex = None
-        if textUntranslatedLiveDict.get(key) is not None and textUntranslatedPTSDict.get(key) is not None:
-            liveText = textUntranslatedLiveDict.get(key)
-            ptsText = textUntranslatedPTSDict.get(key)
-            outIndex = key
-            if liveText == ptsText:
-                outText = textUntranslatedPTSDict[key]
-                matchedLine = '{{{{{}:}}}}{}\n'.format(outIndex, outText)
-                matchedLines.append(matchedLine)
-            else:
-                misMatchedLine = '{{{{{}:pts:}}}}{}\n{{{{{}:live:}}}}{}\n\n'.format(outIndex, ptsText, outIndex, liveText)
-                misMatchedLines.append(misMatchedLine)
-    # --Write Output ------------------------------------------------------
-    out = open("matchedLines.txt", 'w', encoding="utf8")
-    for i in range(len(matchedLines)):
-        lineOut = matchedLines[i]
-        out.write(lineOut)
+        ptsText = textUntranslatedPTSDict.get(key)
+        liveText = textUntranslatedLiveDict.get(key)
+        if liveText == ptsText:
+            lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText)
+            out.write(lineOut)
+        else:
+            count = count + 1
+            lineOut = '{{{{{}:pts:}}}}{}\n{{{{{}:live:}}}}{}\n\n'.format(key, ptsText, key, liveText)
+            out.write(lineOut)
     out.close()
-    # --Write Output ------------------------------------------------------
-    out = open("misMatchedLines.txt", 'w', encoding="utf8")
-    for i in range(len(misMatchedLines)):
-        lineOut = misMatchedLines[i]
-        out.write(lineOut)
-    out.close()
+    print(count)
 
 
 if __name__ == '__main__':
