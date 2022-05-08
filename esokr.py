@@ -551,5 +551,73 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     out.close()
 
 
+@mainFunction
+def diffEnglishLangFiles(LiveFilename, ptsFilename):
+    """Merges en.lang with kr.lang."""
+    reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
+
+    textUntranslatedLiveDict = { }
+    textUntranslatedPTSDict = { }
+    # Get Previous/Live English Text ------------------------------------------------------
+    textIns = open(LiveFilename, 'r', encoding="utf8")
+    for line in textIns:
+        maConstantIndex = reConstantTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        conIndex = ""
+        conText = None
+        if maConstantIndex or maConstantText:
+            if maConstantIndex:
+                conIndex = maConstantIndex.group(1)
+            if maConstantText:
+                conText = maConstantText.group(2)
+            textUntranslatedLiveDict[conIndex] = conText
+    textIns.close()
+    # Get Current/PTS English Text ------------------------------------------------------
+    textIns = open(ptsFilename, 'r', encoding="utf8")
+    for line in textIns:
+        maConstantIndex = reConstantTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        conIndex = ""
+        conText = None
+        if maConstantIndex or maConstantText:
+            if maConstantIndex:
+                conIndex = maConstantIndex.group(1)
+            if maConstantText:
+                conText = maConstantText.group(2)
+            textUntranslatedPTSDict[conIndex] = conText
+    textIns.close()
+    # Compare PTS with Live text, write output -----------------------------------------
+    matchedLines = []
+    misMatchedLines = []
+    for key in textUntranslatedPTSDict:
+        liveText = None
+        ptsText = None
+        outText = None
+        outIndex = None
+        if textUntranslatedLiveDict.get(key) is not None and textUntranslatedPTSDict.get(key) is not None:
+            liveText = textUntranslatedLiveDict.get(key)
+            ptsText = textUntranslatedPTSDict.get(key)
+            outIndex = key
+            if liveText == ptsText:
+                outText = textUntranslatedPTSDict[key]
+                matchedLine = '{{{{{}:}}}}{}\n'.format(outIndex, outText)
+                matchedLines.append(matchedLine)
+            else:
+                misMatchedLine = '{{{{{}:pts:}}}}{}\n{{{{{}:live:}}}}{}\n\n'.format(outIndex, ptsText, outIndex, liveText)
+                misMatchedLines.append(misMatchedLine)
+    # --Write Output ------------------------------------------------------
+    out = open("matchedLines.txt", 'w', encoding="utf8")
+    for i in range(len(matchedLines)):
+        lineOut = matchedLines[i]
+        out.write(lineOut)
+    out.close()
+    # --Write Output ------------------------------------------------------
+    out = open("misMatchedLines.txt", 'w', encoding="utf8")
+    for i in range(len(misMatchedLines)):
+        lineOut = misMatchedLines[i]
+        out.write(lineOut)
+    out.close()
+
+
 if __name__ == '__main__':
         callables.main()
