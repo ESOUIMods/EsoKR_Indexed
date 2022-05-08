@@ -124,19 +124,26 @@ def addIdToFile(txtFilename, idFilename):
 @mainFunction
 def removeIdFromFile(txtFilename):
     """Remove tag from kr.lang files for use with official release."""
-    reHead = re.compile(r'^\{\{(.+):\}\}(.+)')
+    reIndex = re.compile(r'^\{\{(.+):\}\}(.+)$')
+    reIndexOld = re.compile(r'^(\d{1,10}-\d{1,5}-\d{1,5})(.+)$')
 
     # Get ID numbers ------------------------------------------------------
     textLines = []
     textIns = open(txtFilename, 'r', encoding="utf8")
     for line in textIns:
-        maHead = reHead.match(line)
-        if maHead:
-            lead, text = maHead.group(1, 2)
-        textLines.append(text)
+        maIndex = reIndex.match(line)
+        maIndexOld = reIndexOld.match(line)
+        if maIndex:
+            lead, text = maIndex.group(1, 2)
+            textLines.append(text)
+        if maIndexOld:
+            lead = maIndexOld.group(2)
+            text = maIndexOld.group(2)
+            newString = text.replace(lead + " ", "")
+            textLines.append(newString)
     textIns.close()
     # --Write Output ------------------------------------------------------
-    out = open("noid_output.txt", 'w', encoding="utf8")
+    out = open("output.txt", 'w', encoding="utf8")
     for i in range(len(textLines)):
         lineOut = '{}\n'.format(textLines[i])
         out.write(lineOut)
