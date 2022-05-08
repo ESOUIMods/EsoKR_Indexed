@@ -4,6 +4,7 @@ import re
 import os
 import sys
 import codecs
+from difflib import SequenceMatcher
 
 # ------------------------------------------------------------------------------
 class Callables:
@@ -656,6 +657,9 @@ def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
 def diffEnglishLangFiles(LiveFilename, ptsFilename):
     """Merges en.lang with kr.lang."""
     reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
+    reColorTagStart = re.compile(r'(\|c[0-9a-zA-Z]{1,6})')
+    reColorTagEnd = re.compile(r'(\|r)')
+    reControlChar = re.compile(r'(\^f|\^n|\^F|\^N|\^p|\^P)')
 
     textUntranslatedLiveDict = { }
     textUntranslatedPTSDict = { }
@@ -689,9 +693,12 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     textIns.close()
     # Compare PTS with Live text, write output -----------------------------------------
     matchedText = []
+    closeMatchLiveText = []
+    closeMatchPtsText = []
     changedText = []
     addedIndexCount = 0
     matchedCount = 0
+    closMatchCount = 0
     changedCount = 0
     for key in textUntranslatedPTSDict:
         ptsText = textUntranslatedPTSDict.get(key)
@@ -701,16 +708,34 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
             lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText)
             matchedText.append(lineOut)
             continue
+        subLiveText = liveText
+        subPtsText = ptsText
+        # Strip color codes
+        subLiveText = reColorTagStart.sub('', subLiveText)
+        subLiveText = reColorTagEnd.sub('', subLiveText)
+        subPtsText = reColorTagStart.sub('', subPtsText)
+        subPtsText = reColorTagEnd.sub('', subPtsText)
+        # Strip Control Chars ^n ^f ^p
+        subLiveText = reControlChar.sub('', subLiveText)
+        subPtsText = reControlChar.sub('', subPtsText)
+        s = SequenceMatcher(None, subLiveText, subPtsText)
         if liveText == ptsText:
             matchedCount = matchedCount + 1
             lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText)
             matchedText.append(lineOut)
+        elif s.ratio() > 0.6:
+            closMatchCount = closMatchCount + 1
+            lineOut = '{{{{{}:}}}}{}\n'.format(key, liveText)
+            closeMatchLiveText.append(lineOut)
+            lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText)
+            closeMatchPtsText.append(lineOut)
         else:
             changedCount = changedCount + 1
             lineOut = '{{{{{}:pts:}}}}{}\n{{{{{}:live:}}}}{}\n\n'.format(key, ptsText, key, liveText)
             changedText.append(lineOut)
     print(addedIndexCount)
     print(matchedCount)
+    print(closMatchCount)
     print(changedCount)
     # --Write Output ------------------------------------------------------
     out = open("matchedIndexes.txt", 'w', encoding="utf8")
@@ -720,6 +745,21 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     out.write(lineOut)
     for i in range(len(matchedText)):
         lineOut = matchedText[i]
+        out.write(lineOut)
+    out.close()
+    # --Write Output ------------------------------------------------------
+    out = open("closeMatchLiveIndexes.txt", 'w', encoding="utf8")
+    lineOut = '{}: indexes were a close match\n'.format(closMatchCount)
+    out.write(lineOut)
+    for i in range(len(closeMatchLiveText)):
+        lineOut = closeMatchLiveText[i]
+        out.write(lineOut)
+    out.close()
+    out = open("closeMatchPtsIndexes.txt", 'w', encoding="utf8")
+    lineOut = '{}: indexes were a close match\n'.format(closMatchCount)
+    out.write(lineOut)
+    for i in range(len(closeMatchPtsText)):
+        lineOut = closeMatchPtsText[i]
         out.write(lineOut)
     out.close()
     # --Write Output ------------------------------------------------------
