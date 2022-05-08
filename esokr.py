@@ -437,8 +437,7 @@ def mergeIndexedLangText(translatedFilename, unTranslatedFilename):
                 conIndex = maConstantIndex.group(1)
             if maConstantText:
                 conText = maConstantText.group(2)
-                newString = conText.replace(conIndex + " ", "")
-            textTranslatedDict[conIndex] = newString
+            textTranslatedDict[conIndex] = conText
     textIns.close()
     textIns = open(unTranslatedFilename, 'r', encoding="utf8")
     for line in textIns:
@@ -451,8 +450,7 @@ def mergeIndexedLangText(translatedFilename, unTranslatedFilename):
                 conIndex = maConstantIndex.group(1)
             if maConstantText:
                 conText = maConstantText.group(2)
-                newString = conText.replace(conIndex + " ", "")
-            textUntranslatedDict[conIndex] = newString
+            textUntranslatedDict[conIndex] = conText
     textIns.close()
     # --Write Output ------------------------------------------------------
     out = open("output.txt", 'w', encoding="utf8")
@@ -465,6 +463,89 @@ def mergeIndexedLangText(translatedFilename, unTranslatedFilename):
         if not conText:
             conText = textUntranslatedDict[key]
         lineOut = '{{{{{}:}}}}{}\n'.format(conIndex, conText)
+        out.write(lineOut)
+    out.close()
+
+
+@mainFunction
+def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslatedPTSFilename):
+    """Merges en.lang with kr.lang."""
+    reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
+
+    def isTranslatedText(line):
+        for char in range(0, len(line)):
+            returnedBytes = bytes(line[char], 'utf-8')
+            length = len(returnedBytes)
+            if length > 1: return True
+        return None
+
+    textTranslatedDict = { }
+    textUntranslatedLiveDict = { }
+    textUntranslatedPTSDict = { }
+    # Get Previous Translation ------------------------------------------------------
+    textIns = open(translatedFilename, 'r', encoding="utf8")
+    for line in textIns:
+        maConstantIndex = reConstantTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        conIndex = ""
+        conText = None
+        if maConstantIndex or maConstantText:
+            if maConstantIndex:
+                conIndex = maConstantIndex.group(1)
+            if maConstantText:
+                conText = maConstantText.group(2)
+                # newString = conText.replace(conIndex + " ", "")
+            textTranslatedDict[conIndex] = conText
+    textIns.close()
+    # Get Previous/Live English Text ------------------------------------------------------
+    textIns = open(unTranslatedLiveFilename, 'r', encoding="utf8")
+    for line in textIns:
+        maConstantIndex = reConstantTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        conIndex = ""
+        conText = None
+        if maConstantIndex or maConstantText:
+            if maConstantIndex:
+                conIndex = maConstantIndex.group(1)
+            if maConstantText:
+                conText = maConstantText.group(2)
+                # newString = conText.replace(conIndex + " ", "")
+            textUntranslatedLiveDict[conIndex] = conText
+    textIns.close()
+    # Get Current/PTS English Text ------------------------------------------------------
+    textIns = open(unTranslatedPTSFilename, 'r', encoding="utf8")
+    for line in textIns:
+        maConstantIndex = reConstantTag.match(line)
+        maConstantText = reConstantTag.match(line)
+        conIndex = ""
+        conText = None
+        if maConstantIndex or maConstantText:
+            if maConstantIndex:
+                conIndex = maConstantIndex.group(1)
+            if maConstantText:
+                conText = maConstantText.group(2)
+                # newString = conText.replace(conIndex + " ", "")
+            textUntranslatedPTSDict[conIndex] = conText
+    textIns.close()
+    # Compare PTS with Live text, write output -----------------------------------------
+    out = open("output.txt", 'w', encoding="utf8")
+    for key in textUntranslatedPTSDict:
+        liveText = None
+        ptsText = None
+        outText = None
+        outIndex = None
+        if textUntranslatedLiveDict.get(key) is not None and textUntranslatedPTSDict.get(key) is not None:
+            liveText = textUntranslatedLiveDict.get(key)
+            ptsText = textUntranslatedPTSDict.get(key)
+            if liveText == ptsText:
+                if textTranslatedDict.get(key) is not None:
+                    if isTranslatedText(textTranslatedDict.get(key)):
+                        outText = textTranslatedDict[key]
+                        outIndex = key
+        if not outText:
+                outText = textUntranslatedPTSDict.get(key)
+                outIndex = key
+        lineOut = '{{{{{}:}}}}{}\n'.format(outIndex, outText)
         out.write(lineOut)
     out.close()
 
