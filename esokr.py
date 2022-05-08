@@ -495,7 +495,6 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
                 conIndex = maConstantIndex.group(1)
             if maConstantText:
                 conText = maConstantText.group(2)
-                # newString = conText.replace(conIndex + " ", "")
             textTranslatedDict[conIndex] = conText
     textIns.close()
     # Get Previous/Live English Text ------------------------------------------------------
@@ -510,7 +509,6 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
                 conIndex = maConstantIndex.group(1)
             if maConstantText:
                 conText = maConstantText.group(2)
-                # newString = conText.replace(conIndex + " ", "")
             textUntranslatedLiveDict[conIndex] = conText
     textIns.close()
     # Get Current/PTS English Text ------------------------------------------------------
@@ -525,7 +523,6 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
                 conIndex = maConstantIndex.group(1)
             if maConstantText:
                 conText = maConstantText.group(2)
-                # newString = conText.replace(conIndex + " ", "")
             textUntranslatedPTSDict[conIndex] = conText
     textIns.close()
     # Compare PTS with Live text, write output -----------------------------------------
