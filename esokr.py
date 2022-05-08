@@ -587,22 +587,48 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
             textUntranslatedPTSDict[conIndex] = conText
     textIns.close()
     # Compare PTS with Live text, write output -----------------------------------------
-    matchedLines = []
-    misMatchedLines = []
-    count = 0
-    out = open("output.txt", 'w', encoding="utf8")
+    matchedText = []
+    changedText = []
+    addedIndexCount = 0
+    matchedCount = 0
+    changedCount = 0
     for key in textUntranslatedPTSDict:
         ptsText = textUntranslatedPTSDict.get(key)
         liveText = textUntranslatedLiveDict.get(key)
-        if liveText == ptsText:
+        if textUntranslatedLiveDict.get(key) is None:
+            addedIndexCount = addedIndexCount + 1
             lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText)
-            out.write(lineOut)
+            matchedText.append(lineOut)
+            continue
+        if liveText == ptsText:
+            matchedCount = matchedCount + 1
+            lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText)
+            matchedText.append(lineOut)
         else:
-            count = count + 1
+            changedCount = changedCount + 1
             lineOut = '{{{{{}:pts:}}}}{}\n{{{{{}:live:}}}}{}\n\n'.format(key, ptsText, key, liveText)
-            out.write(lineOut)
+            changedText.append(lineOut)
+    print(addedIndexCount)
+    print(matchedCount)
+    print(changedCount)
+    # --Write Output ------------------------------------------------------
+    out = open("matchedIndexes.txt", 'w', encoding="utf8")
+    lineOut = '{}: new indexes added\n'.format(addedIndexCount)
+    out.write(lineOut)
+    lineOut = '{}: indexes matched\n'.format(matchedCount)
+    out.write(lineOut)
+    for i in range(len(matchedText)):
+        lineOut = matchedText[i]
+        out.write(lineOut)
     out.close()
-    print(count)
+    # --Write Output ------------------------------------------------------
+    out = open("changedIndexes.txt", 'w', encoding="utf8")
+    lineOut = '{}: indexes changed\n'.format(changedCount)
+    out.write(lineOut)
+    for i in range(len(changedText)):
+        lineOut = changedText[i]
+        out.write(lineOut)
+    out.close()
 
 
 if __name__ == '__main__':
