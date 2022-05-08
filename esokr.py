@@ -140,6 +140,7 @@ def removeIdFromFile(txtFilename):
             lead = maIndexOld.group(2)
             text = maIndexOld.group(2)
             newString = text.replace(lead + " ", "")
+            newString = newString.lstrip()
             textLines.append(newString)
     textIns.close()
     # --Write Output ------------------------------------------------------
