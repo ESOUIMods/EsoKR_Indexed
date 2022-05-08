@@ -628,18 +628,25 @@ def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
     # --Write Output ------------------------------------------------------
     out = open("output.txt", 'w', encoding="utf8")
     for key in ptsUntranslatedDict:
-        ptsText = ptsUntranslatedDict.get(key)
+        translatedText = textTranslatedDict.get(key)
         liveText = liveUntranslatedDict.get(key)
+        ptsText = ptsUntranslatedDict.get(key)
         conText = None
+        if len(ptsText) == 2:
+            firstChar = ord(ptsText[0])
+            lastChar = ord(ptsText[1])
+            if firstChar == 34 and lastChar == 34:
+                lineOut = '[{}] = ""\n'.format(key)
+                out.write(lineOut)
+                continue
         if liveUntranslatedDict.get(key) is None:
-            conText = ptsUntranslatedDict[key]
-            lineOut = '[{}] = "{}"\n'.format(key, conText)
+            lineOut = '[{}] = "{}"\n'.format(key, ptsText)
             out.write(lineOut)
             continue
         if ptsText == liveText:
-            conText = textTranslatedDict[key]
+            conText = translatedText
         else:
-            conText = ptsUntranslatedDict[key]
+            conText = ptsText
         lineOut = '[{}] = "{}"\n'.format(key, conText)
         out.write(lineOut)
     out.close()
