@@ -253,7 +253,7 @@ def addIndexToEosui(txtFilename):
     """Add tags to either kr_client.str or kr_pregame.str for use with translation files."""
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
     reFontTag = re.compile(r'^\[Font:(.+?)')
-    reEmptyLine = re.compile(r'^\[(.+?)\] = ""')
+    reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
 
     textLines = []
     # Get ID numbers ------------------------------------------------------
@@ -265,6 +265,7 @@ def addIndexToEosui(txtFilename):
         indexPrefix = "P:"
     textIns = open(txtFilename, 'r', encoding="utf8")
     for line in textIns:
+        indexCount = indexCount + 1
         maFontTag = reFontTag.match(line)
         maConstantIndex = reConstantTag.match(line)
         maConstantText = reConstantTag.match(line)
@@ -278,7 +279,6 @@ def addIndexToEosui(txtFilename):
             textLines.append(line)
             continue
         if maConstantIndex or maConstantText:
-            indexCount = indexCount + 1
             if maConstantIndex:
                 conIndex = maConstantIndex.group(1)
             if maConstantText:
@@ -301,7 +301,7 @@ def removeIndexFromEosui(txtFilename):
     reConstantTagOld = re.compile(r'^\[(.+?)\] = "(\{[^CP].+?\})(.+?)"$')
     reConstantTagOlder = re.compile(r'^\[(.+?)\] = "([^CP\{\}].+?)"$')
     reFontTag = re.compile(r'^\[Font:(.+?)')
-    reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
+    reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
 
     textLines = []
     # Get ID numbers ------------------------------------------------------
@@ -320,6 +320,7 @@ def removeIndexFromEosui(txtFilename):
             continue
         if maFontTag:
             textLines.append(line + "\n")
+            continue
         if maConstantTagOlder and not maFontTag:
             conIndex = maConstantTagOlder.group(1)
             conText = maConstantTagOlder.group(2)
