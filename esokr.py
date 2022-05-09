@@ -480,6 +480,9 @@ def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
 def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslatedPTSFilename):
     """Read live and pts en.lang, if text is unchanged use existing translation."""
     reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
+    reColorTagStart = re.compile(r'(\|c[0-9a-zA-Z]{1,6})')
+    reColorTagEnd = re.compile(r'(\|r)')
+    reControlChar = re.compile(r'(\^f|\^n|\^F|\^N|\^p|\^P)')
 
     def isTranslatedText(line):
         for char in range(0, len(line)):
@@ -494,29 +497,19 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     # Get Previous Translation ------------------------------------------------------
     textIns = open(translatedFilename, 'r', encoding="utf8")
     for line in textIns:
-        maConstantIndex = reConstantTag.match(line)
         maConstantText = reConstantTag.match(line)
-        conIndex = ""
-        conText = None
-        if maConstantIndex or maConstantText:
-            if maConstantIndex:
-                conIndex = maConstantIndex.group(1)
-            if maConstantText:
-                conText = maConstantText.group(2)
+        if maConstantText:
+            conIndex = maConstantText.group(1)
+            conText = maConstantText.group(2)
             textTranslatedDict[conIndex] = conText
     textIns.close()
     # Get Previous/Live English Text ------------------------------------------------------
     textIns = open(unTranslatedLiveFilename, 'r', encoding="utf8")
     for line in textIns:
-        maConstantIndex = reConstantTag.match(line)
         maConstantText = reConstantTag.match(line)
-        conIndex = ""
-        conText = None
-        if maConstantIndex or maConstantText:
-            if maConstantIndex:
-                conIndex = maConstantIndex.group(1)
-            if maConstantText:
-                conText = maConstantText.group(2)
+        if maConstantText:
+            conIndex = maConstantText.group(1)
+            conText = maConstantText.group(2)
             textUntranslatedLiveDict[conIndex] = conText
     textIns.close()
     # Get Current/PTS English Text ------------------------------------------------------
@@ -524,34 +517,43 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     for line in textIns:
         maConstantIndex = reConstantTag.match(line)
         maConstantText = reConstantTag.match(line)
-        conIndex = ""
-        conText = None
         if maConstantIndex or maConstantText:
-            if maConstantIndex:
-                conIndex = maConstantIndex.group(1)
-            if maConstantText:
-                conText = maConstantText.group(2)
+            conIndex = maConstantText.group(1)
+            conText = maConstantText.group(2)
             textUntranslatedPTSDict[conIndex] = conText
     textIns.close()
     # Compare PTS with Live text, write output -----------------------------------------
     out = open("output.txt", 'w', encoding="utf8")
     for key in textUntranslatedPTSDict:
-        liveText = None
-        ptsText = None
-        outText = None
-        outIndex = None
-        if textUntranslatedLiveDict.get(key) is not None and textUntranslatedPTSDict.get(key) is not None:
-            liveText = textUntranslatedLiveDict.get(key)
-            ptsText = textUntranslatedPTSDict.get(key)
-            if liveText == ptsText:
-                if textTranslatedDict.get(key) is not None:
-                    if isTranslatedText(textTranslatedDict.get(key)):
-                        outText = textTranslatedDict[key]
-                        outIndex = key
-        if not outText:
-                outText = textUntranslatedPTSDict.get(key)
-                outIndex = key
-        lineOut = '{{{{{}:}}}}{}\n'.format(outIndex, outText)
+        translatedText = textTranslatedDict.get(key)
+        liveText = textUntranslatedLiveDict.get(key)
+        ptsText = textUntranslatedPTSDict.get(key)
+        lineOut = None
+        if textTranslatedDict.get(key) is None:
+            lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText)
+            out.write(lineOut)
+            continue
+        subLiveText = liveText
+        subPtsText = ptsText
+        # Strip color codes
+        subLiveText = reColorTagStart.sub('', subLiveText)
+        subLiveText = reColorTagEnd.sub('', subLiveText)
+        subPtsText = reColorTagStart.sub('', subPtsText)
+        subPtsText = reColorTagEnd.sub('', subPtsText)
+        # Strip Control Chars ^n ^f ^p
+        subLiveText = reControlChar.sub('', subLiveText)
+        subPtsText = reControlChar.sub('', subPtsText)
+        s = SequenceMatcher(None, subLiveText, subPtsText)
+        if (liveText == ptsText) or (s.ratio() > 0.6):
+            if textTranslatedDict.get(key) is not None:
+                if isTranslatedText(textTranslatedDict.get(key)):
+                    lineOut = '{{{{{}:}}}}{}\n'.format(key, translatedText.rstrip())
+                else:
+                    lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip())
+            else:
+                lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip())
+        else:
+            lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip())
         out.write(lineOut)
     out.close()
 
