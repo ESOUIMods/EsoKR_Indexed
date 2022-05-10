@@ -529,8 +529,8 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
         liveText = textUntranslatedLiveDict.get(key)
         ptsText = textUntranslatedPTSDict.get(key)
         lineOut = None
-        if textTranslatedDict.get(key) is None:
-            lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText)
+        if textUntranslatedLiveDict.get(key) is None:
+            lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip())
             out.write(lineOut)
             continue
         subLiveText = liveText
@@ -545,11 +545,8 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
         subPtsText = reControlChar.sub('', subPtsText)
         s = SequenceMatcher(None, subLiveText, subPtsText)
         if (liveText == ptsText) or (s.ratio() > 0.6):
-            if textTranslatedDict.get(key) is not None:
-                if isTranslatedText(textTranslatedDict.get(key)):
-                    lineOut = '{{{{{}:}}}}{}\n'.format(key, translatedText.rstrip())
-                else:
-                    lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip())
+            if (textTranslatedDict.get(key) is not None) and isTranslatedText(textTranslatedDict.get(key)):
+                lineOut = '{{{{{}:}}}}{}\n'.format(key, translatedText.rstrip())
             else:
                 lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip())
         else:
@@ -698,10 +695,12 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     closeMatchLiveText = []
     closeMatchPtsText = []
     changedText = []
+    deletedText = []
     addedIndexCount = 0
     matchedCount = 0
     closMatchCount = 0
     changedCount = 0
+    deletedCount = 0
     for key in textUntranslatedPTSDict:
         ptsText = textUntranslatedPTSDict.get(key)
         liveText = textUntranslatedLiveDict.get(key)
@@ -735,10 +734,17 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
             changedCount = changedCount + 1
             lineOut = '{{{{{}:pts:}}}}{}\n{{{{{}:live:}}}}{}\n\n'.format(key, ptsText, key, liveText)
             changedText.append(lineOut)
-    print(addedIndexCount)
-    print(matchedCount)
-    print(closMatchCount)
-    print(changedCount)
+    for key in textUntranslatedLiveDict:
+        liveText = textUntranslatedLiveDict.get(key)
+        if textUntranslatedPTSDict.get(key) is None:
+            deletedCount = deletedCount + 1
+            lineOut = '{{{{{}:}}}}{}\n'.format(key, liveText)
+            deletedText.append(lineOut)
+    print('{}: new indexes added'.format(addedIndexCount))
+    print('{}: indexes matched'.format(matchedCount))
+    print('{}: indexes were a close match'.format(closMatchCount))
+    print('{}: indexes changed'.format(changedCount))
+    print('{}: indexes deleted'.format(deletedCount))
     # --Write Output ------------------------------------------------------
     out = open("matchedIndexes.txt", 'w', encoding="utf8")
     lineOut = '{}: new indexes added\n'.format(addedIndexCount)
@@ -770,6 +776,14 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     out.write(lineOut)
     for i in range(len(changedText)):
         lineOut = changedText[i]
+        out.write(lineOut)
+    out.close()
+    # --Write Output ------------------------------------------------------
+    out = open("deletedIndexes.txt", 'w', encoding="utf8")
+    lineOut = '{}: indexes deleted\n'.format(deletedCount)
+    out.write(lineOut)
+    for i in range(len(deletedText)):
+        lineOut = deletedText[i]
         out.write(lineOut)
     out.close()
 
