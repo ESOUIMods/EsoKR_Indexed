@@ -419,10 +419,7 @@ def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
 
 @mainFunction
 def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
-    """Merges either kb.lang or kr.lang with updated translations for current live server files.
-    replaced with: diffIndexedLangText()
-    Untested, previously attempted to merge en.lang with kr.lang.
-    """
+    """Merges either kb.lang or kr.lang with updated translations for current live server files."""
     reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
 
     def isTranslatedText(line):
@@ -437,41 +434,33 @@ def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
     # Get ID numbers ------------------------------------------------------
     textIns = open(translatedFilename, 'r', encoding="utf8")
     for line in textIns:
-        maConstantIndex = reConstantTag.match(line)
         maConstantText = reConstantTag.match(line)
-        conIndex = ""
-        conText = None
-        if maConstantIndex or maConstantText:
-            if maConstantIndex:
-                conIndex = maConstantIndex.group(1)
-            if maConstantText:
-                conText = maConstantText.group(2)
-            textTranslatedDict[conIndex] = conText
+        conIndex = maConstantText.group(1)
+        conText = maConstantText.group(2)
+        textTranslatedDict[conIndex] = conText
     textIns.close()
     textIns = open(unTranslatedFilename, 'r', encoding="utf8")
     for line in textIns:
-        maConstantIndex = reConstantTag.match(line)
         maConstantText = reConstantTag.match(line)
-        conIndex = ""
-        conText = None
-        if maConstantIndex or maConstantText:
-            if maConstantIndex:
-                conIndex = maConstantIndex.group(1)
-            if maConstantText:
-                conText = maConstantText.group(2)
-            textUntranslatedDict[conIndex] = conText
+        conIndex = maConstantText.group(1)
+        conText = maConstantText.group(2)
+        textUntranslatedDict[conIndex] = conText
     textIns.close()
     # --Write Output ------------------------------------------------------
     out = open("output.txt", 'w', encoding="utf8")
     for key in textUntranslatedDict:
-        conIndex = key
         conText = None
-        if textTranslatedDict.get(conIndex) is not None:
-            if isTranslatedText(textTranslatedDict.get(conIndex)):
+        if textTranslatedDict.get(key) is None:
+            conText = textUntranslatedDict[key]
+            lineOut = '{{{{{}:}}}}{}\n'.format(key, conText.rstrip())
+            out.write(lineOut)
+            continue
+        if textTranslatedDict.get(key) is not None:
+            if isTranslatedText(textTranslatedDict.get(key)):
                 conText = textTranslatedDict[key]
         if not conText:
             conText = textUntranslatedDict[key]
-        lineOut = '{{{{{}:}}}}{}\n'.format(conIndex, conText)
+        lineOut = '{{{{{}:}}}}{}\n'.format(key, conText)
         out.write(lineOut)
     out.close()
 
@@ -557,7 +546,7 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
 
 @mainFunction
 def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
-    """Reads live and pts en_client.str and if text is the same uses existing translation."""
+    """Reads live and pts en_client.str or en_pregame.str and if text is the same uses existing translation."""
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
     reFontTag = re.compile(r'^\[Font:(.+?)')
     reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
