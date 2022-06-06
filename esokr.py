@@ -467,7 +467,20 @@ def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
 
 @mainFunction
 def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslatedPTSFilename):
-    """Read live and pts en.lang, if text is unchanged use existing translation."""
+    """Read live and pts en.lang, if text is unchanged use existing translation.
+
+    translatedFilename: will almost always be kb.lang.txt
+    unTranslatedLiveFilename: should be the previous en.lang converted to text and then the tags added. This can be
+    en_live.lang_tag.txt or en_prv.lang_tag.txt. Anything that indicates it is older or the the previous en.lang from
+    a previous chapter or patch
+    unTranslatedPTSFilename: should be the current en.lang converted to text and then the tags added. This should be
+    from the current en.lang from the current version after the chapter or the patch is released. This can be either
+    en_pts.lang_tag.txt or en_cur.lang_tag.txt
+
+    translatedFilename: example kb.lang.txt
+    unTranslatedLiveFilename: example en_prv.lang_tag.txt
+    unTranslatedPTSFilename: example en_cur.lang_tag.txt
+    """
     reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
     reColorTagStart = re.compile(r'(\|c[0-9a-zA-Z]{1,6})')
     reColorTagEnd = re.compile(r'(\|r)')
