@@ -126,7 +126,7 @@ def addIndexToLangFile(txtFilename, idFilename):
 def removeIndexToLangFile(txtFilename):
     """Remove tag from either kb.lang or kr.lang files for use with official release."""
     reIndex = re.compile(r'^\{\{(.+):\}\}(.+)$')
-    reIndexOld = re.compile(r'^(\d{1,10}-\d{1,5}-\d{1,5})(.+)$')
+    reIndexOld = re.compile(r'^(\d{1,10}-\d{1,7}-\d{1,7})(.+)$')
 
     # Get ID numbers ------------------------------------------------------
     textLines = []
