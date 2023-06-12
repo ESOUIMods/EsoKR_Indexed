@@ -6,6 +6,7 @@ import sys
 import codecs
 from difflib import SequenceMatcher
 
+
 # ------------------------------------------------------------------------------
 class Callables:
     """A singleton set of objects (typically functions or class instances) that
@@ -122,6 +123,7 @@ def addIndexToLangFile(txtFilename, idFilename):
         out.write(lineOut)
     out.close()
 
+
 @mainFunction
 def removeIndexToLangFile(txtFilename):
     """Remove tag from either kb.lang or kr.lang files for use with official release."""
@@ -151,6 +153,7 @@ def removeIndexToLangFile(txtFilename):
         out.write(lineOut)
     out.close()
 
+
 @mainFunction
 def koreanToEso(txtFilename):
     """Shift text Korean UTF8 to Chinese UTF8."""
@@ -164,16 +167,16 @@ def koreanToEso(txtFilename):
             next_char = None
             if value > 0x00 and value <= 0x74:
                 shift = 1
-            elif value >= 0xc0  and value <= 0xdf:
+            elif value >= 0xc0 and value <= 0xdf:
                 shift = 2
             elif value >= 0xe0 and value <= 0xef:
                 shift = 3
             elif value >= 0xf0 and value <= 0xf7:
                 shift = 4
             if shift > 1:
-                next_char = textIns.read(shift-1)
+                next_char = textIns.read(shift - 1)
             if next_char:
-                char = b''.join([char,next_char])
+                char = b''.join([char, next_char])
             if not char:
                 # eof
                 break
@@ -200,6 +203,7 @@ def koreanToEso(txtFilename):
             out.write(outText)
     out.close()
 
+
 @mainFunction
 def esoToKorean(txtFilename):
     """Shift text from Chinese UTF8 to Korean UTF8."""
@@ -213,16 +217,16 @@ def esoToKorean(txtFilename):
             next_char = None
             if value > 0x00 and value <= 0x74:
                 shift = 1
-            elif value >= 0xc0  and value <= 0xdf:
+            elif value >= 0xc0 and value <= 0xdf:
                 shift = 2
             elif value >= 0xe0 and value <= 0xef:
                 shift = 3
             elif value >= 0xf0 and value <= 0xf7:
                 shift = 4
             if shift > 1:
-                next_char = textIns.read(shift-1)
+                next_char = textIns.read(shift - 1)
             if next_char:
-                char = b''.join([char,next_char])
+                char = b''.join([char, next_char])
             if not char:
                 # eof
                 break
@@ -248,6 +252,7 @@ def esoToKorean(txtFilename):
             outText = codecs.decode(char, 'UTF-8')
             out.write(outText)
     out.close()
+
 
 @mainFunction
 def addIndexToEosui(txtFilename):
@@ -358,8 +363,8 @@ def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
     reFontTag = re.compile(r'^\[Font:(.+?)')
     reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
 
-    textTranslatedDict = { }
-    textUntranslatedDict = { }
+    textTranslatedDict = {}
+    textUntranslatedDict = {}
     # Get ID numbers ------------------------------------------------------
     textIns = open(translatedFilename, 'r', encoding="utf8")
     for line in textIns:
@@ -429,8 +434,8 @@ def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
             if length > 1: return True
         return None
 
-    textTranslatedDict = { }
-    textUntranslatedDict = { }
+    textTranslatedDict = {}
+    textUntranslatedDict = {}
     # Get ID numbers ------------------------------------------------------
     textIns = open(translatedFilename, 'r', encoding="utf8")
     for line in textIns:
@@ -477,7 +482,7 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     from the current en.lang from the current version after the chapter or the patch is released. This can be either
     en_pts.lang_tag.txt or en_cur.lang_tag.txt
 
-    translatedFilename: example kb.lang.txt
+    translatedFilename: example kb.lang.txt or kr.lang_tag.txt
     unTranslatedLiveFilename: example en_prv.lang_tag.txt
     unTranslatedPTSFilename: example en_cur.lang_tag.txt
     """
@@ -493,9 +498,9 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
             if length > 1: return True
         return None
 
-    textTranslatedDict = { }
-    textUntranslatedLiveDict = { }
-    textUntranslatedPTSDict = { }
+    textTranslatedDict = {}
+    textUntranslatedLiveDict = {}
+    textUntranslatedPTSDict = {}
     # Get Previous Translation ------------------------------------------------------
     textIns = open(translatedFilename, 'r', encoding="utf8")
     for line in textIns:
@@ -532,7 +537,10 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
         ptsText = textUntranslatedPTSDict.get(key)
         lineOut = None
         if textUntranslatedLiveDict.get(key) is None:
-            lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip())
+            if (textTranslatedDict.get(key) is not None) and isTranslatedText(textTranslatedDict.get(key)):
+                lineOut = '{{{{{}:}}}}{}\n'.format(key, translatedText.rstrip())
+            else:
+                lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip())
             out.write(lineOut)
             continue
         subLiveText = liveText
@@ -564,9 +572,16 @@ def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
     reFontTag = re.compile(r'^\[Font:(.+?)')
     reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
 
-    textTranslatedDict = { }
-    liveUntranslatedDict = { }
-    ptsUntranslatedDict = { }
+    def isTranslatedText(line):
+        for char in range(0, len(line)):
+            returnedBytes = bytes(line[char], 'utf-8')
+            length = len(returnedBytes)
+            if length > 1: return True
+        return None
+
+    textTranslatedDict = {}
+    liveUntranslatedDict = {}
+    ptsUntranslatedDict = {}
     # Read translated text ----------------------------------------------------
     textIns = open(translatedFilename, 'r', encoding="utf8")
     for line in textIns:
@@ -642,7 +657,10 @@ def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
                 out.write(lineOut)
                 continue
         if liveUntranslatedDict.get(key) is None:
-            lineOut = '[{}] = "{}"\n'.format(key, ptsText)
+            if (textTranslatedDict.get(key) is not None) and isTranslatedText(textTranslatedDict.get(key)):
+                lineOut = '[{}] = "{}"\n'.format(key, translatedText)
+            else:
+                lineOut = '[{}] = "{}"\n'.format(key, ptsText)
             out.write(lineOut)
             continue
         if ptsText == liveText:
@@ -662,8 +680,8 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     reColorTagEnd = re.compile(r'(\|r)')
     reControlChar = re.compile(r'(\^f|\^n|\^F|\^N|\^p|\^P)')
 
-    textUntranslatedLiveDict = { }
-    textUntranslatedPTSDict = { }
+    textUntranslatedLiveDict = {}
+    textUntranslatedPTSDict = {}
     # Get Previous/Live English Text ------------------------------------------------------
     textIns = open(LiveFilename, 'r', encoding="utf8")
     for line in textIns:
@@ -791,4 +809,4 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
 
 
 if __name__ == '__main__':
-        callables.main()
+    callables.main()
