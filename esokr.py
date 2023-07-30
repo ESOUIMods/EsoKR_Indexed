@@ -196,8 +196,6 @@ def koreanToEso(txtFilename):
                     temp = temp - 0x33800
                 else:
                     temp = temp - 0x3F800
-            elif temp >= 0xE6B880 and temp <= 0xE9A6A3:
-                temp = temp + 0x3F800
             char = temp.to_bytes(shift, byteorder='big')
             outText = codecs.decode(char, 'UTF-8')
             out.write(outText)
@@ -246,8 +244,6 @@ def esoToKorean(txtFilename):
                     temp = temp + 0x33800
                 else:
                     temp = temp + 0x3F800
-            elif temp >= 0xEAB080 and temp <= 0xED9EA3:
-                temp = temp - 0x3F800
             char = temp.to_bytes(shift, byteorder='big')
             outText = codecs.decode(char, 'UTF-8')
             out.write(outText)
@@ -491,6 +487,16 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     reColorTagEnd = re.compile(r'(\|r)')
     reControlChar = re.compile(r'(\^f|\^n|\^F|\^N|\^p|\^P)')
 
+    def stripWeirdChars(line):
+        # Strip weird dots … or other chars
+        # …, —, â€¦
+        lineBytes = bytes(line, 'utf-8')
+        lineBytes = lineBytes.replace(b'\xe2\x80\xa6', b'')
+        lineBytes = lineBytes.replace(b'\xe2\x80\x94', b'')
+        lineBytes = lineBytes.replace(b'\xc3\xa2\xe2\x82\xac\xc2\xa6', b'')
+        line = lineBytes.decode('utf-8')
+        return line
+
     def isTranslatedText(line):
         for char in range(0, len(line)):
             returnedBytes = bytes(line[char], 'utf-8')
@@ -531,38 +537,97 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     textIns.close()
     # Compare PTS with Live text, write output -----------------------------------------
     out = open("output.txt", 'w', encoding="utf8")
+    verifyOut = open("verify_output.txt", 'w', encoding="utf8")
     for key in textUntranslatedPTSDict:
         translatedText = textTranslatedDict.get(key)
         liveText = textUntranslatedLiveDict.get(key)
         ptsText = textUntranslatedPTSDict.get(key)
-        lineOut = None
-        if textUntranslatedLiveDict.get(key) is None:
-            if (textTranslatedDict.get(key) is not None) and isTranslatedText(textTranslatedDict.get(key)):
-                lineOut = '{{{{{}:}}}}{}\n'.format(key, translatedText.rstrip())
-            else:
-                lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip())
-            out.write(lineOut)
-            continue
-        subLiveText = liveText
-        subPtsText = ptsText
-        # Strip color codes
-        subLiveText = reColorTagStart.sub('', subLiveText)
-        subLiveText = reColorTagEnd.sub('', subLiveText)
-        subPtsText = reColorTagStart.sub('', subPtsText)
-        subPtsText = reColorTagEnd.sub('', subPtsText)
-        # Strip Control Chars ^n ^f ^p
-        subLiveText = reControlChar.sub('', subLiveText)
-        subPtsText = reControlChar.sub('', subPtsText)
-        s = SequenceMatcher(None, subLiveText, subPtsText)
-        if (liveText == ptsText) or (s.ratio() > 0.6):
-            if (textTranslatedDict.get(key) is not None) and isTranslatedText(textTranslatedDict.get(key)):
-                lineOut = '{{{{{}:}}}}{}\n'.format(key, translatedText.rstrip())
-            else:
-                lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip())
-        else:
-            lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip())
+        translatedTextStripped = None
+        liveTextStripped = None
+        ptsTextStripped = None
+        #-- Strip Odd Chars
+        if translatedText is not None:
+            translatedTextStripped = stripWeirdChars(translatedText)
+        if liveText is not None:
+            liveTextStripped = stripWeirdChars(liveText)
+        if ptsText is not None:
+            ptsTextStripped = stripWeirdChars(ptsText)
+        #-- Assign lineOut to ptsText
+        lineOut = ptsText
+        hasExtendedChars = False
+        hasTranslation = False
+        if translatedTextStripped is not None:
+            hasExtendedChars = isTranslatedText(translatedTextStripped)
+        # ---Determine Change Ratio between Live and Pts---
+        liveAndPtsGreaterThanThreshold = False
+        hasLiveAndPts = False
+        if liveTextStripped is not None and ptsTextStripped is not None:
+            hasLiveAndPts = True
+            subLiveText = liveTextStripped
+            subPtsText = ptsTextStripped
+            # Strip color codes
+            subLiveText = reColorTagStart.sub('', subLiveText)
+            subLiveText = reColorTagEnd.sub('', subLiveText)
+            subPtsText = reColorTagStart.sub('', subPtsText)
+            subPtsText = reColorTagEnd.sub('', subPtsText)
+            # Strip Control Chars ^n ^f ^p
+            subLiveText = reControlChar.sub('', subLiveText)
+            subPtsText = reControlChar.sub('', subPtsText)
+            #-- Get Ratio
+            s = SequenceMatcher(None, subLiveText, subPtsText)
+            if (liveTextStripped == ptsTextStripped) or (s.ratio() > 0.6):
+                liveAndPtsGreaterThanThreshold = True
+        # ---Determine Change Ratio between Translated and Pts ---
+        translatedAndPtsGreaterThanThreshold = False
+        hasTranslatedAndPts = False
+        if translatedTextStripped is not None and ptsTextStripped is not None:
+            hasTranslatedAndPts = True
+            subTranslatedText = translatedTextStripped
+            subPtsText = ptsTextStripped
+            # Strip color codes
+            subTranslatedText = reColorTagStart.sub('', subTranslatedText)
+            subTranslatedText = reColorTagEnd.sub('', subTranslatedText)
+            subPtsText = reColorTagStart.sub('', subPtsText)
+            subPtsText = reColorTagEnd.sub('', subPtsText)
+            # Strip Control Chars ^n ^f ^p
+            subTranslatedText = reControlChar.sub('', subTranslatedText)
+            subPtsText = reControlChar.sub('', subPtsText)
+            #-- Get Ratio
+            s = SequenceMatcher(None, subTranslatedText, subPtsText)
+            if (translatedTextStripped == ptsTextStripped) or (s.ratio() > 0.6):
+                translatedAndPtsGreaterThanThreshold = True
+        writeOutput = False
+        #-- Determine if there is a questionable comparison
+        if translatedTextStripped is not None and ptsTextStripped is not None and not translatedAndPtsGreaterThanThreshold and not hasExtendedChars:
+            if (translatedTextStripped != ptsTextStripped):
+                hasTranslation = True
+                writeOutput = True
+
+        # Determine translation state ------------------------------
+        if not hasTranslation and hasExtendedChars:
+            hasTranslation = True
+        if translatedTextStripped is None:
+            hasTranslation = False
+        #-- changes between live and pts requires new translation
+        if liveTextStripped is not None and ptsTextStripped is not None:
+            if not liveAndPtsGreaterThanThreshold:
+                hasTranslation = False
+        #-- New Line from ptsText that did not exist previously
+        if liveTextStripped is None and ptsTextStripped is not None:
+            hasTranslation = False
+
+        if hasTranslation:
+            lineOut = translatedText
+        lineOut = '{{{{{}:}}}}{}\n'.format(key, lineOut.rstrip())
+        #-- Save questionable comparison to verify
+        if writeOutput:
+            verifyOut.write('{{{{{}:}}}}{}\n'.format(key, translatedText.rstrip()))
+            verifyOut.write('{{{{{}:}}}}{}\n'.format(key, liveText.rstrip()))
+            verifyOut.write('{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip()))
+            verifyOut.write(lineOut)
         out.write(lineOut)
     out.close()
+    verifyOut.close()
 
 
 @mainFunction
@@ -648,7 +713,6 @@ def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
         translatedText = textTranslatedDict.get(key)
         liveText = liveUntranslatedDict.get(key)
         ptsText = ptsUntranslatedDict.get(key)
-        conText = None
         if len(ptsText) == 2:
             firstChar = ord(ptsText[0])
             lastChar = ord(ptsText[1])
@@ -656,18 +720,22 @@ def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
                 lineOut = '[{}] = ""\n'.format(key)
                 out.write(lineOut)
                 continue
-        if liveUntranslatedDict.get(key) is None:
-            if (textTranslatedDict.get(key) is not None) and isTranslatedText(textTranslatedDict.get(key)):
-                lineOut = '[{}] = "{}"\n'.format(key, translatedText)
-            else:
-                lineOut = '[{}] = "{}"\n'.format(key, ptsText)
-            out.write(lineOut)
-            continue
-        if ptsText == liveText:
-            conText = translatedText
-        else:
-            conText = ptsText
-        lineOut = '[{}] = "{}"\n'.format(key, conText)
+        hasExtendedChars = False
+        hasTranslation = False
+        outputText = ptsText
+
+        if translatedText is not None and (translatedText != ""):
+            hasExtendedChars = isTranslatedText(translatedText)
+            if (translatedText != ptsText):
+                hasTranslation = True
+        if not hasTranslation and hasExtendedChars:
+            hasTranslation = True
+        if translatedText is None:
+            hasTranslation = False
+
+        if hasTranslation:
+            outputText = translatedText
+        lineOut = '[{}] = "{}"\n'.format(key, outputText)
         out.write(lineOut)
     out.close()
 
