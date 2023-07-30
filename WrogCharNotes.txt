@@ -1,0 +1,13 @@
+There is one character that does not show up 7BC8 however the preceding 7BC7 and the following character 7BC9 show up. You shuold be able to copy paste the text from the sample file into the game without mods and see the same result. 
+
+Where I am most concerned is I need that to show up in Gamepad mode.
+
+SafeAddString(SI_TRIBUTEMECHANIC_PLAYERPERSPECTIVE0, "篇篈築Gain |cffffff<<X:1>>|r <<t:2>>.", 1)
+
+MJNgaiPRC-Medium
+
+defaultfontdefs_gamepad.xml
+defaultfontdefs_keyboard.xml
+
+defaultfontstrings_western.xml
+defaultfontstrings_japanese.xml
