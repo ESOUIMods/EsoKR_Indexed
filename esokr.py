@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 #
 import re
-import os
+import struct
+import io
 import sys
 import codecs
 from difflib import SequenceMatcher
@@ -348,10 +349,72 @@ def removeIndexFromEosui(txtFilename):
     out.close()
 
 
+class FileReader(io.FileIO):
+    """File-object with convenience reading functions."""
+
+    def unpack(self, fmt): return struct.unpack(fmt, self.read(struct.calcsize(fmt)))
+
+    def readUByte(self): return struct.unpack('>B', self.read(1))[0]
+    def readUInt16(self): return struct.unpack('>H', self.read(2))[0]
+    def readUInt32(self): return struct.unpack('>I', self.read(4))[0]
+
+    def readByte(self): return struct.unpack('>b', self.read(1))[0]
+    def readInt16(self): return struct.unpack('>h', self.read(2))[0]
+    def readInt32(self): return struct.unpack('>i', self.read(4))[0]
+
+    def readSig(self): return struct.unpack('4s', self.read(4))[0]
+    def readString8(self): return self.read(struct.unpack('B', self.read(1))[0])
+    def readString16(self): return self.read(struct.unpack('>H', self.read(2))[0])
+    def readString32(self): return self.read(struct.unpack('I', self.read(4))[0])
+
+@mainFunction
+def readLangFile(currentLanguageFile):
+    lineIns = open(currentLanguageFile, 'rb')
+    headerUnknown = FileReader.readUInt32(lineIns)
+    numIndexes = FileReader.readUInt32(lineIns)
+    for index in range(numIndexes):
+        fieldId = FileReader.readUInt32(lineIns)
+        indexUnknown = FileReader.readUInt32(lineIns)
+        fieldIndex = FileReader.readUInt32(lineIns)
+        fieldOffset = FileReader.readUInt32(lineIns)
+    numNulTerminatedStrings = None
+    #-- Current en.lang
+    if numIndexes == 993388:
+        numNulTerminatedStrings = 479776
+    #-- Pts en.lang
+    if numIndexes == 997481:
+        numNulTerminatedStrings = 481685
+    not_eof = True
+    nullChar = False
+    textLine = None
+    while not_eof:
+        while not nullChar:
+            shift = 1
+            char = lineIns.read(shift)
+            value = int.from_bytes(char, "big")
+            next_char = None
+            if value > 0x00 and value <= 0x74:
+                shift = 1
+            elif value >= 0xc0 and value <= 0xdf:
+                shift = 2
+            elif value >= 0xe0 and value <= 0xef:
+                shift = 3
+            elif value >= 0xf0 and value <= 0xf7:
+                shift = 4
+            if shift > 1:
+                next_char = lineIns.read(shift - 1)
+            if next_char:
+                char = b''.join([char, next_char])
+            if not char:
+                # eof
+                break
+    lineIns.close()
+
 @mainFunction
 def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
-    """Merges either kb_client.str or kb_pregame.str with updated translations for current live server files.
-    replaced with: diffEsouiText()
+    """replaced with: diffEsouiText
+
+    Merges either kb_client.str or kb_pregame.str with updated translations for current live server files.
     Untested, previously attempted to merge en_client.str and kb_client.str
     """
 
@@ -420,7 +483,7 @@ def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
 
 @mainFunction
 def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
-    """Merges either kb.lang or kr.lang with updated translations for current live server files."""
+    """Untested: Merges either kb.lang or kr.lang with updated translations for current live server files."""
     reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
 
     def isTranslatedText(line):
@@ -486,6 +549,16 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     reColorTagStart = re.compile(r'(\|c[0-9a-zA-Z]{1,6})')
     reColorTagEnd = re.compile(r'(\|r)')
     reControlChar = re.compile(r'(\^f|\^n|\^F|\^N|\^p|\^P)')
+
+    #-- removeUnnecessaryText
+    reColorTagError = re.compile(r'(\|c000000)(\|c[0-9a-zA-Z]{6,6})')
+
+    #-- removeUnnecessaryText not Used yet, BETA
+    def removeUnnecessaryText(line):
+        maColorTagError = reColorTagError.match(line)
+        if maColorTagError:
+            line = line.replace("|c000000", "")
+        return line
 
     def stripWeirdChars(line):
         # Strip weird dots … or other chars
@@ -742,7 +815,7 @@ def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
 
 @mainFunction
 def diffEnglishLangFiles(LiveFilename, ptsFilename):
-    """Merges en.lang with kr.lang."""
+    """Determines the differences between the current and pts en.lang after converted to text and tagged."""
     reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
     reColorTagStart = re.compile(r'(\|c[0-9a-zA-Z]{1,6})')
     reColorTagEnd = re.compile(r'(\|r)')
