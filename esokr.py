@@ -5,7 +5,6 @@ import struct
 import io
 import sys
 import codecs
-import locale
 from difflib import SequenceMatcher
 
 
