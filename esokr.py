@@ -5,6 +5,7 @@ import struct
 import io
 import sys
 import codecs
+import locale
 from difflib import SequenceMatcher
 
 
@@ -369,14 +370,16 @@ class FileReader(io.FileIO):
 
 @mainFunction
 def readLangFile(currentLanguageFile):
-    lineIns = open(currentLanguageFile, 'rb')
-    headerUnknown = FileReader.readUInt32(lineIns)
-    numIndexes = FileReader.readUInt32(lineIns)
+    lineIn = open(currentLanguageFile, 'rb')
+    lineOut = open('readLangFile.txt', 'wb')
+    extendedLineOut = open('readExtendedOutput.txt', 'w')
+    numSections = FileReader.readUInt32(lineIn)
+    numIndexes = FileReader.readUInt32(lineIn)
     for index in range(numIndexes):
-        fieldId = FileReader.readUInt32(lineIns)
-        indexUnknown = FileReader.readUInt32(lineIns)
-        fieldIndex = FileReader.readUInt32(lineIns)
-        fieldOffset = FileReader.readUInt32(lineIns)
+        sectionId = FileReader.readUInt32(lineIn)
+        subSectionId = FileReader.readUInt32(lineIn)
+        stringIndex = FileReader.readUInt32(lineIn)
+        stringOffset = FileReader.readUInt32(lineIn)
     numNulTerminatedStrings = None
     #-- Current en.lang
     if numIndexes == 993388:
@@ -387,10 +390,13 @@ def readLangFile(currentLanguageFile):
     not_eof = True
     nullChar = False
     textLine = None
+    outputString = None
+    hasExtendedChars = False
+    count = 0
     while not_eof:
         while not nullChar:
             shift = 1
-            char = lineIns.read(shift)
+            char = lineIn.read(shift)
             value = int.from_bytes(char, "big")
             next_char = None
             if value > 0x00 and value <= 0x74:
@@ -402,13 +408,34 @@ def readLangFile(currentLanguageFile):
             elif value >= 0xf0 and value <= 0xf7:
                 shift = 4
             if shift > 1:
-                next_char = lineIns.read(shift - 1)
+                next_char = lineIn.read(shift - 1)
+                hasExtendedChars = True
             if next_char:
                 char = b''.join([char, next_char])
             if not char:
                 # eof
+                not_eof = False
                 break
-    lineIns.close()
+            if textLine is None:
+                textLine = char
+                continue
+            if textLine is not None and char != b'\x00' and char != b'\x0A':
+                textLine = b''.join([textLine, char])
+            if textLine is not None and char != b'\x00' and char == b'\x0A':
+                textLine = b''.join([textLine, b'\x5C\x6E'])
+            if textLine is not None and char == b'\x00' and char != b'\x0A':
+                textLine = b''.join([textLine, b'\x0A'])
+                outputString = textLine # .replace(b'\x5C\x6E', b'\x5C\x5C\x6E')
+                textLine = None
+                nullChar = True
+                count = count + 1
+        extendedLineOut.write('{{{{{}:}}}}{}\n'.format(count, outputString))
+        lineOut.write(outputString)
+        nullChar = False
+    print(count)
+    lineIn.close()
+    lineOut.close()
+    extendedLineOut.close()
 
 @mainFunction
 def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
