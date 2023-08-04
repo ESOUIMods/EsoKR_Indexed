@@ -6,7 +6,7 @@ import io
 import sys
 import codecs
 from difflib import SequenceMatcher
-
+import section_constants as section
 
 # ------------------------------------------------------------------------------
 class Callables:
@@ -367,32 +367,21 @@ class FileReader(io.FileIO):
     def readString16(self): return self.read(struct.unpack('>H', self.read(2))[0])
     def readString32(self): return self.read(struct.unpack('I', self.read(4))[0])
 
+currentFileHeaders = {}
+currentFileStrings = {}
+previousFileHeaders = {}
+previousFileStrings = {}
+translatedFileHeaders = {}
+translatedFileStrings = {}
+
 @mainFunction
 def readLangFile(currentLanguageFile):
-    lineIn = open(currentLanguageFile, 'rb')
-    lineOut = open('readLangFile.txt', 'wb')
-    extendedLineOut = open('readExtendedOutput.txt', 'w')
-    numSections = FileReader.readUInt32(lineIn)
-    numIndexes = FileReader.readUInt32(lineIn)
-    for index in range(numIndexes):
-        sectionId = FileReader.readUInt32(lineIn)
-        subSectionId = FileReader.readUInt32(lineIn)
-        stringIndex = FileReader.readUInt32(lineIn)
-        stringOffset = FileReader.readUInt32(lineIn)
-    numNulTerminatedStrings = None
-    #-- Current en.lang
-    if numIndexes == 993388:
-        numNulTerminatedStrings = 479776
-    #-- Pts en.lang
-    if numIndexes == 997481:
-        numNulTerminatedStrings = 481685
-    not_eof = True
-    nullChar = False
-    textLine = None
-    outputString = None
-    hasExtendedChars = False
-    count = 0
-    while not_eof:
+
+    def readString(offset, start, file):
+        nullChar = False
+        textLine = None
+        currentPosition = file.tell()
+        file.seek(start + offset)
         while not nullChar:
             shift = 1
             char = lineIn.read(shift)
@@ -408,12 +397,10 @@ def readLangFile(currentLanguageFile):
                 shift = 4
             if shift > 1:
                 next_char = lineIn.read(shift - 1)
-                hasExtendedChars = True
             if next_char:
                 char = b''.join([char, next_char])
             if not char:
                 # eof
-                not_eof = False
                 break
             if textLine is None:
                 textLine = char
@@ -423,18 +410,34 @@ def readLangFile(currentLanguageFile):
             if textLine is not None and char != b'\x00' and char == b'\x0A':
                 textLine = b''.join([textLine, b'\x5C\x6E'])
             if textLine is not None and char == b'\x00' and char != b'\x0A':
-                textLine = b''.join([textLine, b'\x0A'])
-                outputString = textLine # .replace(b'\x5C\x6E', b'\x5C\x5C\x6E')
-                textLine = None
                 nullChar = True
-                count = count + 1
-        extendedLineOut.write('{{{{{}:}}}}{}\n'.format(count, outputString))
-        lineOut.write(outputString)
-        nullChar = False
-    print(count)
+        file.seek(currentPosition)
+        return textLine
+
+    lineIn = open(currentLanguageFile, 'rb')
+    numSections = FileReader.readUInt32(lineIn)
+    numIndexes = FileReader.readUInt32(lineIn)
+    stringsStartPosition = 8 + (16 * numIndexes)
+    sectionToOutput = section.npc_names
+    for index in range(1, numIndexes):
+        sectionId = FileReader.readUInt32(lineIn)
+        sectionIndex = FileReader.readUInt32(lineIn)
+        stringIndex = FileReader.readUInt32(lineIn)
+        stringOffset = FileReader.readUInt32(lineIn)
+        indexString = readString(stringOffset, stringsStartPosition, lineIn)
+        if currentFileStrings.get(stringOffset) is None:
+            currentFileStrings[stringOffset] = {}
+            currentFileStrings[stringOffset].update(string = indexString)
+            currentFileStrings[stringOffset].update(sectionId = sectionId)
+        currentFileHeaders[index] = {}
+        currentFileHeaders[index].update(sectionId = sectionId)
+        currentFileHeaders[index].update(sectionIndex = sectionIndex)
+        currentFileHeaders[index].update(stringIndex = stringIndex)
+        currentFileHeaders[index].update(stringOffset = stringOffset)
+        dictEntry = currentFileStrings.get(stringOffset)
+        dictString = dictEntry.get('string')
+        currentFileHeaders[index].update(string = dictString)
     lineIn.close()
-    lineOut.close()
-    extendedLineOut.close()
 
 @mainFunction
 def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
