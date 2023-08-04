@@ -376,6 +376,7 @@ translatedFileStrings = {}
 
 @mainFunction
 def readLangFile(currentLanguageFile):
+    """Reads a language files such as en.lang and stores the indexes and strings in dictionaries for later processing."""
 
     def readString(offset, start, file):
         nullChar = False
