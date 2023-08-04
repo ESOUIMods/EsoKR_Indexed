@@ -373,6 +373,7 @@ previousFileHeaders = {}
 previousFileStrings = {}
 translatedFileHeaders = {}
 translatedFileStrings = {}
+duplicateSectionStrings = {}
 
 @mainFunction
 def readLangFile(currentLanguageFile):
@@ -439,6 +440,22 @@ def readLangFile(currentLanguageFile):
         dictString = dictEntry.get('string')
         currentFileHeaders[index].update(string = dictString)
     lineIn.close()
+    sectionLineOut = open('sectionOutput.txt', 'w', encoding="utf8")
+    for index in range(1, numIndexes):
+        dictEntry = currentFileHeaders.get(index)
+        dictSection = dictEntry.get('sectionId')
+        dictSectionIndex = dictEntry.get('sectionIndex')
+        dictStringIndex = dictEntry.get('stringIndex')
+        dictStringOffset = dictEntry.get('stringOffset')
+        dictString = dictEntry.get('string').decode('utf-8').replace('^M', '').replace('^F', '').replace('^m', '').replace('^f', '').replace('^N', '').replace('^n', '')
+
+        if dictSection == section.npc_names:
+            if duplicateSectionStrings.get(dictStringOffset) is None:
+                duplicateSectionStrings[dictStringOffset] = {}
+                duplicateSectionStrings[dictStringOffset].update(string = dictString)
+                sectionLineOut.write('{{{{{}-{}-{}:}}}}{}\n'.format(dictSection,dictSectionIndex,dictStringIndex,dictString))
+    sectionLineOut.close()
+
 
 @mainFunction
 def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
