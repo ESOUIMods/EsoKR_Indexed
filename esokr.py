@@ -367,13 +367,15 @@ class FileReader(io.FileIO):
     def readString16(self): return self.read(struct.unpack('>H', self.read(2))[0])
     def readString32(self): return self.read(struct.unpack('I', self.read(4))[0])
 
-currentFileHeaders = {}
+def writeUInt32(file, value): file.write(struct.pack('>I', value))
+
+currentFileIndexes = {}
 currentFileStrings = {}
-previousFileHeaders = {}
+previousFileIndexes = {}
 previousFileStrings = {}
-translatedFileHeaders = {}
+translatedFileIndexes = {}
 translatedFileStrings = {}
-duplicateSectionStrings = {}
+
 
 @mainFunction
 def readLangFile(currentLanguageFile):
@@ -407,54 +409,77 @@ def readLangFile(currentLanguageFile):
             if textLine is None:
                 textLine = char
                 continue
-            if textLine is not None and char != b'\x00' and char != b'\x0A':
+            if textLine is not None and char != b'\x00':
                 textLine = b''.join([textLine, char])
-            if textLine is not None and char != b'\x00' and char == b'\x0A':
-                textLine = b''.join([textLine, b'\x5C\x6E'])
-            if textLine is not None and char == b'\x00' and char != b'\x0A':
+            # if textLine is not None and char != b'\x00' and char == b'\x0A':
+            #     textLine = b''.join([textLine, b'\x5C\x6E'])
+            if textLine is not None and char == b'\x00':
                 nullChar = True
         file.seek(currentPosition)
         return textLine
 
     lineIn = open(currentLanguageFile, 'rb')
     numSections = FileReader.readUInt32(lineIn)
+    # add 1 so the range is 1 to numIndexes, instead of 0 to X
     numIndexes = FileReader.readUInt32(lineIn)
     stringsStartPosition = 8 + (16 * numIndexes)
     sectionToOutput = section.npc_names
-    for index in range(1, numIndexes):
+    predictedOffset = 0
+    stringCount = 0
+    currentFileIndexes.update(numIndexes = numIndexes)
+    for index in range(0, numIndexes):
+        # Assign Section ID and Index, the offset and the string
         sectionId = FileReader.readUInt32(lineIn)
         sectionIndex = FileReader.readUInt32(lineIn)
         stringIndex = FileReader.readUInt32(lineIn)
         stringOffset = FileReader.readUInt32(lineIn)
         indexString = readString(stringOffset, stringsStartPosition, lineIn)
-        if currentFileStrings.get(stringOffset) is None:
-            currentFileStrings[stringOffset] = {}
-            currentFileStrings[stringOffset].update(string = indexString)
-            currentFileStrings[stringOffset].update(sectionId = sectionId)
-        currentFileHeaders[index] = {}
-        currentFileHeaders[index].update(sectionId = sectionId)
-        currentFileHeaders[index].update(sectionIndex = sectionIndex)
-        currentFileHeaders[index].update(stringIndex = stringIndex)
-        currentFileHeaders[index].update(stringOffset = stringOffset)
-        dictEntry = currentFileStrings.get(stringOffset)
-        dictString = dictEntry.get('string')
-        currentFileHeaders[index].update(string = dictString)
+        # Store index
+        currentFileIndexes[index] = {}
+        currentFileIndexes[index].update(sectionId = sectionId)
+        currentFileIndexes[index].update(sectionIndex = sectionIndex)
+        currentFileIndexes[index].update(stringIndex = stringIndex)
+        currentFileIndexes[index].update(stringOffset = stringOffset)
+        currentFileIndexes[index].update(string = indexString)
+        # Store the string with predicted offset as a value
+        if currentFileStrings.get(indexString) is None:
+            currentFileStrings[indexString] = {}
+            currentFileStrings[indexString].update(stringOffset = predictedOffset)
+            # 1 extra for the null terminator
+            predictedOffset = predictedOffset + (len(indexString) + 1)
+            currentFileStrings[stringCount] = {}
+            currentFileStrings[stringCount].update(string = indexString)
+            stringCount = stringCount + 1
     lineIn.close()
-    sectionLineOut = open('sectionOutput.txt', 'w', encoding="utf8")
-    for index in range(1, numIndexes):
-        dictEntry = currentFileHeaders.get(index)
-        dictSection = dictEntry.get('sectionId')
-        dictSectionIndex = dictEntry.get('sectionIndex')
-        dictStringIndex = dictEntry.get('stringIndex')
-        dictStringOffset = dictEntry.get('stringOffset')
-        dictString = dictEntry.get('string').decode('utf-8').replace('^M', '').replace('^F', '').replace('^m', '').replace('^f', '').replace('^N', '').replace('^n', '')
-
-        if dictSection == section.npc_names:
-            if duplicateSectionStrings.get(dictStringOffset) is None:
-                duplicateSectionStrings[dictStringOffset] = {}
-                duplicateSectionStrings[dictStringOffset].update(string = dictString)
-                sectionLineOut.write('{{{{{}-{}-{}:}}}}{}\n'.format(dictSection,dictSectionIndex,dictStringIndex,dictString))
-    sectionLineOut.close()
+    currentFileStrings.update(stringCount = stringCount)
+    print(currentFileStrings.get('stringCount'))
+    numIndexes = currentFileIndexes.get('numIndexes')
+    for index in range(0, numIndexes):
+        currentIndex = currentFileIndexes.get(index)
+        dictString = currentIndex.get('string')
+        currentStringInfo = currentFileStrings.get(dictString)
+        currentOffset = currentStringInfo.get('stringOffset')
+        currentFileIndexes[index].update(stringOffset = currentOffset)
+    indexOut = open('output.lang', 'wb')
+    writeUInt32(indexOut, numSections)
+    writeUInt32(indexOut, numIndexes)
+    numIndexes = currentFileIndexes.get('numIndexes')
+    for index in range(0, numIndexes):
+        currentIndex = currentFileIndexes.get(index)
+        sectionId = currentIndex.get('sectionId')
+        sectionIndex = currentIndex.get('sectionIndex')
+        stringIndex = currentIndex.get('stringIndex')
+        stringOffset = currentIndex.get('stringOffset')
+        writeUInt32(indexOut, sectionId)
+        writeUInt32(indexOut, sectionIndex)
+        writeUInt32(indexOut, stringIndex)
+        writeUInt32(indexOut, stringOffset)
+    numStrings = currentFileStrings.get('stringCount')
+    for index in range(0, numStrings):
+        currentDict = currentFileStrings.get(index)
+        currentString = currentDict.get('string')
+        indexOut.write(currentString + b'\x00')
+    indexOut.close()
 
 
 @mainFunction
