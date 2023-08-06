@@ -349,24 +349,7 @@ def removeIndexFromEosui(txtFilename):
     out.close()
 
 
-class FileReader(io.FileIO):
-    """File-object with convenience reading functions."""
-
-    def unpack(self, fmt): return struct.unpack(fmt, self.read(struct.calcsize(fmt)))
-
-    def readUByte(self): return struct.unpack('>B', self.read(1))[0]
-    def readUInt16(self): return struct.unpack('>H', self.read(2))[0]
-    def readUInt32(self): return struct.unpack('>I', self.read(4))[0]
-
-    def readByte(self): return struct.unpack('>b', self.read(1))[0]
-    def readInt16(self): return struct.unpack('>h', self.read(2))[0]
-    def readInt32(self): return struct.unpack('>i', self.read(4))[0]
-
-    def readSig(self): return struct.unpack('4s', self.read(4))[0]
-    def readString8(self): return self.read(struct.unpack('B', self.read(1))[0])
-    def readString16(self): return self.read(struct.unpack('>H', self.read(2))[0])
-    def readString32(self): return self.read(struct.unpack('I', self.read(4))[0])
-
+def readUInt32(file): return struct.unpack('>I', file.read(4))[0]
 def writeUInt32(file, value): file.write(struct.pack('>I', value))
 
 currentFileIndexes = {}
@@ -419,8 +402,8 @@ def readLangFile(currentLanguageFile):
         return textLine
 
     lineIn = open(currentLanguageFile, 'rb')
-    numSections = FileReader.readUInt32(lineIn)
-    numIndexes = FileReader.readUInt32(lineIn)
+    numSections = readUInt32(lineIn)
+    numIndexes = readUInt32(lineIn)
     stringsStartPosition = 8 + (16 * numIndexes)
     sectionToOutput = section.npc_names
     predictedOffset = 0
@@ -428,10 +411,10 @@ def readLangFile(currentLanguageFile):
     currentFileIndexes.update(numIndexes = numIndexes)
     for index in range(0, numIndexes):
         # Assign Section ID and Index, the offset and the string
-        sectionId = FileReader.readUInt32(lineIn)
-        sectionIndex = FileReader.readUInt32(lineIn)
-        stringIndex = FileReader.readUInt32(lineIn)
-        stringOffset = FileReader.readUInt32(lineIn)
+        sectionId = readUInt32(lineIn)
+        sectionIndex = readUInt32(lineIn)
+        stringIndex = readUInt32(lineIn)
+        stringOffset = readUInt32(lineIn)
         indexString = readString(stringOffset, stringsStartPosition, lineIn)
         # Store index
         currentFileIndexes[index] = {}
