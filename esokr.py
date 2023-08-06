@@ -420,7 +420,6 @@ def readLangFile(currentLanguageFile):
 
     lineIn = open(currentLanguageFile, 'rb')
     numSections = FileReader.readUInt32(lineIn)
-    # add 1 so the range is 1 to numIndexes, instead of 0 to X
     numIndexes = FileReader.readUInt32(lineIn)
     stringsStartPosition = 8 + (16 * numIndexes)
     sectionToOutput = section.npc_names
