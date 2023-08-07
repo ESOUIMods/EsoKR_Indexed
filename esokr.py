@@ -420,77 +420,79 @@ def readNullString(offset, start, file):
     file.seek(currentPosition)
     return textLine
 
-def readLangFile(languageFileName, fileIndexes, fileStrings):
-    lineIn = open(languageFileName, 'rb')
-    numSections = readUInt32(lineIn)
-    numIndexes = readUInt32(lineIn)
-    stringsStartPosition = 8 + (16 * numIndexes)
-    predictedOffset = 0
-    stringCount = 0
-    fileIndexes.update(numIndexes = numIndexes)
-    fileIndexes.update(numSections = numSections)
-    for index in range(0, numIndexes):
-        chunk = lineIn.read(16)
-        sectionId, sectionIndex, stringIndex, stringOffset = struct.unpack('>IIII', chunk)
-        indexString = readNullString(stringOffset, stringsStartPosition, lineIn)
-        # Store index and the string
-        fileIndexes[index] = {
-            'sectionId': sectionId,
-            'sectionIndex': sectionIndex,
-            'stringIndex': stringIndex,
-            'stringOffset': stringOffset,
-            'string': indexString
-        }
-        if fileStrings.get(indexString) is None:
-            # Create a dictionary entry for the offset with the indexString as a key
-            fileStrings[indexString] = {
-                'stringOffset': predictedOffset,
+def readLangFile(languageFileName):
+    with open(languageFileName, 'rb') as lineIn:
+        numSections = readUInt32(lineIn)
+        numIndexes = readUInt32(lineIn)
+        stringsStartPosition = 8 + (16 * numIndexes)
+        predictedOffset = 0
+        stringCount = 0
+        fileIndexes = {'numIndexes': numIndexes, 'numSections': numSections}
+        fileStrings = {'stringCount': stringCount}
+
+        for index in range(numIndexes):
+            chunk = lineIn.read(16)
+            sectionId, sectionIndex, stringIndex, stringOffset = struct.unpack('>IIII', chunk)
+            indexString = readNullString(stringOffset, stringsStartPosition, lineIn)
+            fileIndexes[index] = {
+                'sectionId': sectionId,
+                'sectionIndex': sectionIndex,
+                'stringIndex': stringIndex,
+                'stringOffset': stringOffset,
+                'string': indexString
             }
-            # Create a dictionary entry for the string with stringCount as a key
-            fileStrings[stringCount] = {
-                'string': indexString,
-            }
-            # add one to stringCount
-            stringCount = stringCount + 1
-            # 1 extra for the null terminator
-            predictedOffset = predictedOffset + (len(indexString) + 1)
-    lineIn.close()
-    fileStrings.update(stringCount = stringCount)
+            if indexString not in fileStrings:
+                # Create a dictionary entry for the offset with the indexString as a key
+                fileStrings[indexString] = {
+                    'stringOffset': predictedOffset,
+                }
+                # Create a dictionary entry for the string with stringCount as a key
+                fileStrings[stringCount] = {
+                    'string': indexString,
+                }
+                # add one to stringCount
+                stringCount += 1
+                # 1 extra for the null terminator
+                predictedOffset += (len(indexString) + 1)
+        fileStrings['stringCount'] = stringCount
+
+    return fileIndexes, fileStrings
 
 def writeLangFile(languageFileName, fileIndexes, fileStrings):
-    numIndexes = fileIndexes.get('numIndexes')
-    numSections = fileIndexes.get('numSections')
-    numStrings = fileStrings.get('stringCount')
+    numIndexes = fileIndexes['numIndexes']
+    numSections = fileIndexes['numSections']
+    numStrings = fileStrings['stringCount']
+
     # Read the indexes and update offset if string length has changed.
-    for index in range(0, numIndexes):
-        currentIndex = fileIndexes.get(index)
-        dictString = currentIndex.get('string')
-        currentStringInfo = fileStrings.get(dictString)
-        currentOffset = currentStringInfo.get('stringOffset')
-        fileIndexes[index].update(stringOffset = currentOffset)
-    indexOut = open(languageFileName, 'wb')
-    writeUInt32(indexOut, numSections)
-    writeUInt32(indexOut, numIndexes)
-    for index in range(0, numIndexes):
-        currentIndex = fileIndexes.get(index)
-        sectionId = currentIndex.get('sectionId')
-        sectionIndex = currentIndex.get('sectionIndex')
-        stringIndex = currentIndex.get('stringIndex')
-        stringOffset = currentIndex.get('stringOffset')
-        chunk = struct.pack('>IIII', sectionId, sectionIndex, stringIndex, stringOffset)
-        indexOut.write(chunk)
-    for index in range(0, numStrings):
-        currentDict = fileStrings.get(index)
-        currentString = currentDict.get('string')
-        indexOut.write(currentString + b'\x00')
-    indexOut.close()
+    for index in range(numIndexes):
+        currentIndex = fileIndexes[index]
+        dictString = currentIndex['string']
+        currentStringInfo = fileStrings[dictString]
+        currentOffset = currentStringInfo['stringOffset']
+        fileIndexes[index]['stringOffset'] = currentOffset
+
+    with open(languageFileName, 'wb') as indexOut:
+        writeUInt32(indexOut, numSections)
+        writeUInt32(indexOut, numIndexes)
+        for index in range(numIndexes):
+            currentIndex = fileIndexes[index]
+            sectionId = currentIndex['sectionId']
+            sectionIndex = currentIndex['sectionIndex']
+            stringIndex = currentIndex['stringIndex']
+            stringOffset = currentIndex['stringOffset']
+            chunk = struct.pack('>IIII', sectionId, sectionIndex, stringIndex, stringOffset)
+            indexOut.write(chunk)
+        for index in range(numStrings):
+            currentDict = fileStrings[index]
+            currentString = currentDict['string']
+            indexOut.write(currentString + b'\x00')
 
 @mainFunction
 def readCurrentLangFile(currentLanguageFile):
     """Reads a language files such as en.lang and stores the indexes and strings in dictionaries for later processing."""
 
-    readLangFile(currentLanguageFile, currentFileIndexes, currentFileStrings)
-    print(currentFileStrings.get('stringCount'))
+    currentFileIndexes, currentFileStrings = readLangFile(currentLanguageFile)
+    print(currentFileStrings['stringCount'])
     writeLangFile('output.lang', currentFileIndexes, currentFileStrings)
 
 
