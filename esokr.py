@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 #
+import argparse
 import re
 import struct
 import io
@@ -10,67 +11,39 @@ import section_constants as section
 
 # ------------------------------------------------------------------------------
 class Callables:
-    """A singleton set of objects (typically functions or class instances) that
-    can be called as functions from the command line.
-
-    Functions are called with their arguments, while object instances are called
-    with their method and then their functions. E.g.:
-    * bish afunction arg1 arg2 arg3
-    * bish anInstance.aMethod arg1 arg2 arg3"""
-
-    # --Ctor
     def __init__(self):
-        """Initialization."""
         self.callObjs = {}
 
-    # --Add a callable
     def add(self, callObj, callKey=None):
-        """Add a callable object.
-
-        callObj:
-            A function or class instance.
-        callKey:
-            Name by which the object will be accessed from the command line.
-            If callKey is not defined, then callObj.__name__ is used."""
         callKey = callKey or callObj.__name__
         self.callObjs[callKey] = callObj
 
-    # --Help
     def printHelp(self, callKey):
-        """Print help for specified callKey."""
-        print(help(self.callObjs[callKey]))
+        if callKey in self.callObjs:
+            print(self.callObjs[callKey].__doc__)
+        else:
+            print(f"Unknown function/object: {callKey}")
 
-    # --Main
     def main(self):
-        callObjs = self.callObjs
-        # --Call key, tail
-        # This makes no sense since if there was a dot it would be in the filename
-        callKey = sys.argv[1]
-        # This makes no sense because it doesn't seem to capture what is after genHtml
-        # The intent here is to use callObj.__name__ but there isn't a tail
-        # callTail = (len(callParts) > 1 and callParts[1])
-        # --Help request?
+        callKey, *args = sys.argv[1:]
+
         if callKey == '-h':
-            self.printHelp(self)
+            self.printHelp(args[0] if args else None)
             return
-        # --Not have key?
-        if callKey not in callObjs:
-            print("Unknown function/object: {}".format(callKey))
+
+        if callKey not in self.callObjs:
+            print(f"Unknown function/object: {callKey}")
             return
-        # --Callable
-        callObj = callObjs[callKey]
+
+        callObj = self.callObjs[callKey]
         if isinstance(callObj, str):
             callObj = eval(callObj)
-        # The intent here is to use callObj.__name__ but there isn't a tail
-        # if callTail:
-        #    callObj = eval('callObj.' + callTail)
-        # --Args
-        args = sys.argv[2:]
-        # --Keywords?
+
         keywords = {}
         argDex = 0
         reKeyArg = re.compile(r'^\-(\D\w+)')
         reKeyBool = re.compile(r'^\+(\D\w+)')
+
         while argDex < len(args):
             arg = args[argDex]
             if reKeyArg.match(arg):
@@ -83,12 +56,12 @@ class Callables:
                 keywords[keyword] = 1
                 del args[argDex]
             else:
-                argDex = argDex + 1
-        # --Apply
+                argDex += 1
+
         callObj(*args, **keywords)
 
 
-# --Callables Singleton
+# Callables Singleton
 callables = Callables()
 
 
@@ -105,24 +78,21 @@ def addIndexToLangFile(txtFilename, idFilename):
     """Add tag from either kb.lang or kr.lang files for use with translation files."""
     textLines = []
     idLines = []
-    # Get ID numbers ------------------------------------------------------
-    textIns = open(txtFilename, 'r', encoding="utf8")
-    for line in textIns:
-        newstr = line.rstrip()
-        textLines.append(newstr)
-    textIns.close()
-    # Get Text ------------------------------------------------------
-    idIns = open(idFilename, 'r', encoding="utf8")
-    for line in idIns:
-        newstr = line.strip()
-        idLines.append(newstr)
-    idIns.close()
-    # --Write Output ------------------------------------------------------
-    out = open("output.txt", 'w', encoding="utf8")
-    for i in range(len(textLines)):
-        lineOut = '{{{{{}:}}}}{}\n'.format(idLines[i], textLines[i])
-        out.write(lineOut)
-    out.close()
+
+    with open(txtFilename, 'r', encoding="utf8") as textIns:
+        for line in textIns:
+            newstr = line.rstrip()
+            textLines.append(newstr)
+
+    with open(idFilename, 'r', encoding="utf8") as idIns:
+        for line in idIns:
+            newstr = line.strip()
+            idLines.append(newstr)
+
+    with open('output.txt', 'w', encoding="utf8") as output:
+        for i in range(len(textLines)):
+            lineOut = '{{{}}}'.format(idLines[i]) + textLines[i] + '\n'
+            output.write(lineOut)
 
 
 @mainFunction
@@ -1035,5 +1005,5 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     out.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     callables.main()
