@@ -349,9 +349,6 @@ def removeIndexFromEosui(txtFilename):
     out.close()
 
 
-def readUInt32(file): return struct.unpack('>I', file.read(4))[0]
-def writeUInt32(file, value): file.write(struct.pack('>I', value))
-
 currentFileIndexes = {}
 currentFileStrings = {}
 previousFileIndexes = {}
@@ -359,109 +356,142 @@ previousFileStrings = {}
 translatedFileIndexes = {}
 translatedFileStrings = {}
 
+def readUInt32(file): return struct.unpack('>I', file.read(4))[0]
+def writeUInt32(file, value): file.write(struct.pack('>I', value))
 
-@mainFunction
-def readLangFile(currentLanguageFile):
-    """Reads a language files such as en.lang and stores the indexes and strings in dictionaries for later processing."""
-
-    def readString(offset, start, file):
-        nullChar = False
-        textLine = None
-        currentPosition = file.tell()
-        file.seek(start + offset)
-        while not nullChar:
+def readNullStringByChar(offset, start, file):
+    """Reads one byte and any subsequent bytes of a multi byte sequence."""
+    nullChar = False
+    textLine = None
+    currentPosition = file.tell()
+    file.seek(start + offset)
+    while not nullChar:
+        shift = 1
+        char = file.read(shift)
+        value = int.from_bytes(char, "big")
+        next_char = None
+        if value > 0x00 and value <= 0x74:
             shift = 1
-            char = lineIn.read(shift)
-            value = int.from_bytes(char, "big")
-            next_char = None
-            if value > 0x00 and value <= 0x74:
-                shift = 1
-            elif value >= 0xc0 and value <= 0xdf:
-                shift = 2
-            elif value >= 0xe0 and value <= 0xef:
-                shift = 3
-            elif value >= 0xf0 and value <= 0xf7:
-                shift = 4
-            if shift > 1:
-                next_char = lineIn.read(shift - 1)
-            if next_char:
-                char = b''.join([char, next_char])
-            if not char:
-                # eof
-                break
-            if textLine is None:
-                textLine = char
-                continue
-            if textLine is not None and char != b'\x00':
-                textLine = b''.join([textLine, char])
-            # if textLine is not None and char != b'\x00' and char == b'\x0A':
-            #     textLine = b''.join([textLine, b'\x5C\x6E'])
-            if textLine is not None and char == b'\x00':
-                nullChar = True
-        file.seek(currentPosition)
-        return textLine
+        elif value >= 0xc0 and value <= 0xdf:
+            shift = 2
+        elif value >= 0xe0 and value <= 0xef:
+            shift = 3
+        elif value >= 0xf0 and value <= 0xf7:
+            shift = 4
+        if shift > 1:
+            next_char = file.read(shift - 1)
+        if next_char:
+            char = b''.join([char, next_char])
+        if not char:
+            # eof
+            break
+        if textLine is None:
+            textLine = char
+            continue
+        if textLine is not None and char != b'\x00':
+            textLine = b''.join([textLine, char])
+        # if textLine is not None and char != b'\x00' and char == b'\x0A':
+        #     textLine = b''.join([textLine, b'\x5C\x6E'])
+        if textLine is not None and char == b'\x00':
+            nullChar = True
+    file.seek(currentPosition)
+    return textLine
 
-    lineIn = open(currentLanguageFile, 'rb')
+def readNullString(offset, start, file):
+    """Reads the amount of bytes of chunkSize and looks for a null char then returns a string."""
+    chunkSize = 1024
+    nullChar = False
+    textLine = b''
+    currentPosition = file.tell()
+    file.seek(start + offset)
+    while not nullChar:
+        chunk = file.read(chunkSize)
+        if not chunk:
+            # End of file
+            break
+        null_index = chunk.find(b"\x00")
+        if null_index >= 0:
+            # Found the null terminator within the chunk
+            textLine += chunk[:null_index]
+            nullChar = True
+        else:
+            # Null terminator not found in this chunk, so append the whole chunk to textLine
+            textLine += chunk
+    file.seek(currentPosition)
+    return textLine
+
+def readLangFile(languageFileName, fileIndexes, fileStrings):
+    lineIn = open(languageFileName, 'rb')
     numSections = readUInt32(lineIn)
     numIndexes = readUInt32(lineIn)
     stringsStartPosition = 8 + (16 * numIndexes)
-    sectionToOutput = section.npc_names
     predictedOffset = 0
     stringCount = 0
-    currentFileIndexes.update(numIndexes = numIndexes)
+    fileIndexes.update(numIndexes = numIndexes)
+    fileIndexes.update(numSections = numSections)
     for index in range(0, numIndexes):
-        # Assign Section ID and Index, the offset and the string
-        sectionId = readUInt32(lineIn)
-        sectionIndex = readUInt32(lineIn)
-        stringIndex = readUInt32(lineIn)
-        stringOffset = readUInt32(lineIn)
-        indexString = readString(stringOffset, stringsStartPosition, lineIn)
-        # Store index
-        currentFileIndexes[index] = {}
-        currentFileIndexes[index].update(sectionId = sectionId)
-        currentFileIndexes[index].update(sectionIndex = sectionIndex)
-        currentFileIndexes[index].update(stringIndex = stringIndex)
-        currentFileIndexes[index].update(stringOffset = stringOffset)
-        currentFileIndexes[index].update(string = indexString)
-        # Store the string with predicted offset as a value
-        if currentFileStrings.get(indexString) is None:
-            currentFileStrings[indexString] = {}
-            currentFileStrings[indexString].update(stringOffset = predictedOffset)
+        chunk = lineIn.read(16)
+        sectionId, sectionIndex, stringIndex, stringOffset = struct.unpack('>IIII', chunk)
+        indexString = readNullString(stringOffset, stringsStartPosition, lineIn)
+        # Store index and the string
+        fileIndexes[index] = {
+            'sectionId': sectionId,
+            'sectionIndex': sectionIndex,
+            'stringIndex': stringIndex,
+            'stringOffset': stringOffset,
+            'string': indexString
+        }
+        if fileStrings.get(indexString) is None:
+            # Create a dictionary entry for the offset with the indexString as a key
+            fileStrings[indexString] = {
+                'stringOffset': predictedOffset,
+            }
+            # Create a dictionary entry for the string with stringCount as a key
+            fileStrings[stringCount] = {
+                'string': indexString,
+            }
+            # add one to stringCount
+            stringCount = stringCount + 1
             # 1 extra for the null terminator
             predictedOffset = predictedOffset + (len(indexString) + 1)
-            currentFileStrings[stringCount] = {}
-            currentFileStrings[stringCount].update(string = indexString)
-            stringCount = stringCount + 1
     lineIn.close()
-    currentFileStrings.update(stringCount = stringCount)
-    print(currentFileStrings.get('stringCount'))
-    numIndexes = currentFileIndexes.get('numIndexes')
+    fileStrings.update(stringCount = stringCount)
+
+def writeLangFile(languageFileName, fileIndexes, fileStrings):
+    numIndexes = fileIndexes.get('numIndexes')
+    numSections = fileIndexes.get('numSections')
+    numStrings = fileStrings.get('stringCount')
+    # Read the indexes and update offset if string length has changed.
     for index in range(0, numIndexes):
-        currentIndex = currentFileIndexes.get(index)
+        currentIndex = fileIndexes.get(index)
         dictString = currentIndex.get('string')
-        currentStringInfo = currentFileStrings.get(dictString)
+        currentStringInfo = fileStrings.get(dictString)
         currentOffset = currentStringInfo.get('stringOffset')
-        currentFileIndexes[index].update(stringOffset = currentOffset)
-    indexOut = open('output.lang', 'wb')
+        fileIndexes[index].update(stringOffset = currentOffset)
+    indexOut = open(languageFileName, 'wb')
     writeUInt32(indexOut, numSections)
     writeUInt32(indexOut, numIndexes)
-    numIndexes = currentFileIndexes.get('numIndexes')
     for index in range(0, numIndexes):
-        currentIndex = currentFileIndexes.get(index)
+        currentIndex = fileIndexes.get(index)
         sectionId = currentIndex.get('sectionId')
         sectionIndex = currentIndex.get('sectionIndex')
         stringIndex = currentIndex.get('stringIndex')
         stringOffset = currentIndex.get('stringOffset')
-        writeUInt32(indexOut, sectionId)
-        writeUInt32(indexOut, sectionIndex)
-        writeUInt32(indexOut, stringIndex)
-        writeUInt32(indexOut, stringOffset)
-    numStrings = currentFileStrings.get('stringCount')
+        chunk = struct.pack('>IIII', sectionId, sectionIndex, stringIndex, stringOffset)
+        indexOut.write(chunk)
     for index in range(0, numStrings):
-        currentDict = currentFileStrings.get(index)
+        currentDict = fileStrings.get(index)
         currentString = currentDict.get('string')
         indexOut.write(currentString + b'\x00')
     indexOut.close()
+
+@mainFunction
+def readCurrentLangFile(currentLanguageFile):
+    """Reads a language files such as en.lang and stores the indexes and strings in dictionaries for later processing."""
+
+    readLangFile(currentLanguageFile, currentFileIndexes, currentFileStrings)
+    print(currentFileStrings.get('stringCount'))
+    writeLangFile('output.lang', currentFileIndexes, currentFileStrings)
 
 
 @mainFunction
