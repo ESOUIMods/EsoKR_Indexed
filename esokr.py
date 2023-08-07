@@ -91,7 +91,7 @@ def addIndexToLangFile(txtFilename, idFilename):
 
     with open('output.txt', 'w', encoding="utf8") as output:
         for i in range(len(textLines)):
-            lineOut = '{{{}}}'.format(idLines[i]) + textLines[i] + '\n'
+            lineOut = '{{{{{}:}}}}'.format(idLines[i]) + textLines[i] + '\n'
             output.write(lineOut)
 
 
@@ -103,122 +103,119 @@ def removeIndexToLangFile(txtFilename):
 
     # Get ID numbers ------------------------------------------------------
     textLines = []
-    textIns = open(txtFilename, 'r', encoding="utf8")
-    for line in textIns:
-        maIndex = reIndex.match(line)
-        maIndexOld = reIndexOld.match(line)
-        if maIndex:
-            lead, text = maIndex.group(1, 2)
-            textLines.append(text)
-        if maIndexOld:
-            lead = maIndexOld.group(2)
-            text = maIndexOld.group(2)
-            newString = text.replace(lead + " ", "")
-            newString = newString.lstrip()
-            textLines.append(newString)
-    textIns.close()
-    # --Write Output ------------------------------------------------------
-    out = open("output.txt", 'w', encoding="utf8")
-    for i in range(len(textLines)):
-        lineOut = '{}\n'.format(textLines[i])
-        out.write(lineOut)
-    out.close()
+
+    with open(txtFilename, 'r', encoding="utf8") as textIns:
+        for line in textIns:
+            matchIndex = reIndex.match(line)
+            matchIndexOld = reIndexOld.match(line)
+            if matchIndex:
+                lead, text = matchIndex.group(1, 2)
+                textLines.append(text)
+            if matchIndexOld:
+                lead = matchIndexOld.group(2)
+                text = matchIndexOld.group(2)
+                newString = text.replace(lead + " ", "")
+                newString = newString.lstrip()
+                textLines.append(newString)
+
+    with open("output.txt", 'w', encoding="utf8") as out:
+        for line in textLines:
+            lineOut = '{}\n'.format(line)
+            out.write(lineOut)
 
 
 @mainFunction
 def koreanToEso(txtFilename):
     """Shift text Korean UTF8 to Chinese UTF8."""
     not_eof = True
-    out = open("output.txt", 'w', encoding="utf8")
     with open(txtFilename, 'rb') as textIns:
-        while not_eof:
-            shift = 1
-            char = textIns.read(shift)
-            value = int.from_bytes(char, "big")
-            next_char = None
-            if value > 0x00 and value <= 0x74:
+        with open("output.txt", 'w', encoding="utf8") as out:
+            while not_eof:
                 shift = 1
-            elif value >= 0xc0 and value <= 0xdf:
-                shift = 2
-            elif value >= 0xe0 and value <= 0xef:
-                shift = 3
-            elif value >= 0xf0 and value <= 0xf7:
-                shift = 4
-            if shift > 1:
-                next_char = textIns.read(shift - 1)
-            if next_char:
-                char = b''.join([char, next_char])
-            if not char:
-                # eof
-                break
-            temp = int.from_bytes(char, "big")
-            if temp >= 0xE18480 and temp <= 0xE187BF:
-                temp = temp + 0x43400
-            elif temp > 0xE384B0 and temp <= 0xE384BF:
-                temp = temp + 0x237D0
-            elif temp > 0xE38580 and temp <= 0xE3868F:
-                temp = temp + 0x23710
-            elif temp >= 0xEAB080 and temp <= 0xED9EAC:
-                if temp >= 0xEAB880 and temp <= 0xEABFBF:
-                    temp = temp - 0x33800
-                elif temp >= 0xEBB880 and temp <= 0xEBBFBF:
-                    temp = temp - 0x33800
-                elif temp >= 0xECB880 and temp <= 0xECBFBF:
-                    temp = temp - 0x33800
-                else:
-                    temp = temp - 0x3F800
-            char = temp.to_bytes(shift, byteorder='big')
-            outText = codecs.decode(char, 'UTF-8')
-            out.write(outText)
-    out.close()
+                char = textIns.read(shift)
+                value = int.from_bytes(char, "big")
+                next_char = None
+                if value > 0x00 and value <= 0x74:
+                    shift = 1
+                elif value >= 0xc0 and value <= 0xdf:
+                    shift = 2
+                elif value >= 0xe0 and value <= 0xef:
+                    shift = 3
+                elif value >= 0xf0 and value <= 0xf7:
+                    shift = 4
+                if shift > 1:
+                    next_char = textIns.read(shift - 1)
+                if next_char:
+                    char = b''.join([char, next_char])
+                if not char:
+                    # eof
+                    break
+                temp = int.from_bytes(char, "big")
+                if temp >= 0xE18480 and temp <= 0xE187BF:
+                    temp = temp + 0x43400
+                elif temp > 0xE384B0 and temp <= 0xE384BF:
+                    temp = temp + 0x237D0
+                elif temp > 0xE38580 and temp <= 0xE3868F:
+                    temp = temp + 0x23710
+                elif temp >= 0xEAB080 and temp <= 0xED9EAC:
+                    if temp >= 0xEAB880 and temp <= 0xEABFBF:
+                        temp = temp - 0x33800
+                    elif temp >= 0xEBB880 and temp <= 0xEBBFBF:
+                        temp = temp - 0x33800
+                    elif temp >= 0xECB880 and temp <= 0xECBFBF:
+                        temp = temp - 0x33800
+                    else:
+                        temp = temp - 0x3F800
+                char = temp.to_bytes(shift, byteorder='big')
+                outText = codecs.decode(char, 'UTF-8')
+                out.write(outText)
 
 
 @mainFunction
 def esoToKorean(txtFilename):
     """Shift text from Chinese UTF8 to Korean UTF8."""
     not_eof = True
-    out = open("output.txt", 'w', encoding="utf8")
     with open(txtFilename, 'rb') as textIns:
-        while not_eof:
-            shift = 1
-            char = textIns.read(shift)
-            value = int.from_bytes(char, "big")
-            next_char = None
-            if value > 0x00 and value <= 0x74:
+        with open("output.txt", 'w', encoding="utf8") as out:
+            while not_eof:
                 shift = 1
-            elif value >= 0xc0 and value <= 0xdf:
-                shift = 2
-            elif value >= 0xe0 and value <= 0xef:
-                shift = 3
-            elif value >= 0xf0 and value <= 0xf7:
-                shift = 4
-            if shift > 1:
-                next_char = textIns.read(shift - 1)
-            if next_char:
-                char = b''.join([char, next_char])
-            if not char:
-                # eof
-                break
-            temp = int.from_bytes(char, "big")
-            if temp >= 0xE5B880 and temp <= 0xE5BBBF:
-                temp = temp - 0x43400
-            elif temp > 0xE5BC80 and temp <= 0xE5BC8F:
-                temp = temp - 0x237D0
-            elif temp > 0xE5BC90 and temp <= 0xE5BD9F:
-                temp = temp - 0x23710
-            elif temp >= 0xE6B880 and temp <= 0xE9A6AC:
-                if temp >= 0xE78080 and temp <= 0xE787BF:
-                    temp = temp + 0x33800
-                elif temp >= 0xE88080 and temp <= 0xE887BF:
-                    temp = temp + 0x33800
-                elif temp >= 0xE98080 and temp <= 0xE987BF:
-                    temp = temp + 0x33800
-                else:
-                    temp = temp + 0x3F800
-            char = temp.to_bytes(shift, byteorder='big')
-            outText = codecs.decode(char, 'UTF-8')
-            out.write(outText)
-    out.close()
+                char = textIns.read(shift)
+                value = int.from_bytes(char, "big")
+                next_char = None
+                if value > 0x00 and value <= 0x74:
+                    shift = 1
+                elif value >= 0xc0 and value <= 0xdf:
+                    shift = 2
+                elif value >= 0xe0 and value <= 0xef:
+                    shift = 3
+                elif value >= 0xf0 and value <= 0xf7:
+                    shift = 4
+                if shift > 1:
+                    next_char = textIns.read(shift - 1)
+                if next_char:
+                    char = b''.join([char, next_char])
+                if not char:
+                    # eof
+                    break
+                temp = int.from_bytes(char, "big")
+                if temp >= 0xE5B880 and temp <= 0xE5BBBF:
+                    temp = temp - 0x43400
+                elif temp > 0xE5BC80 and temp <= 0xE5BC8F:
+                    temp = temp - 0x237D0
+                elif temp > 0xE5BC90 and temp <= 0xE5BD9F:
+                    temp = temp - 0x23710
+                elif temp >= 0xE6B880 and temp <= 0xE9A6AC:
+                    if temp >= 0xE78080 and temp <= 0xE787BF:
+                        temp = temp + 0x33800
+                    elif temp >= 0xE88080 and temp <= 0xE887BF:
+                        temp = temp + 0x33800
+                    elif temp >= 0xE98080 and temp <= 0xE987BF:
+                        temp = temp + 0x33800
+                    else:
+                        temp = temp + 0x3F800
+                char = temp.to_bytes(shift, byteorder='big')
+                outText = codecs.decode(char, 'UTF-8')
+                out.write(outText)
 
 
 @mainFunction
