@@ -225,43 +225,60 @@ def addIndexToEosui(txtFilename):
     reFontTag = re.compile(r'^\[Font:(.+?)')
     reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
 
+    no_prefix_indexes = [
+        "SI_MEGASERVER1",
+        "SI_MEGASERVER2",
+        "SI_KEYBINDINGS_LAYER_BATTLEGROUNDS",
+        "SI_KEYBINDINGS_LAYER_DIALOG",
+        "SI_KEYBINDINGS_LAYER_GENERAL",
+        "SI_KEYBINDINGS_LAYER_HOUSING_EDITOR",
+        "SI_KEYBINDINGS_LAYER_HOUSING_EDITOR_PLACEMENT_MODE",
+        "SI_KEYBINDINGS_LAYER_HUD_HOUSING",
+        "SI_KEYBINDINGS_LAYER_INSTANCE_KICK_WARNING",
+        "SI_KEYBINDINGS_LAYER_NOTIFICATIONS",
+        "SI_KEYBINDINGS_LAYER_SIEGE",
+        "SI_KEYBINDINGS_LAYER_USER_INTERFACE_SHORTCUTS",
+        "SI_KEYBINDINGS_LAYER_UTILITY_WHEEL"
+    ]
+
     textLines = []
-    # Get ID numbers ------------------------------------------------------
     indexPrefix = ""
-    indexCount = 0
+
     if re.search('client', txtFilename):
         indexPrefix = "C:"
     if re.search('pregame', txtFilename):
         indexPrefix = "P:"
-    textIns = open(txtFilename, 'r', encoding="utf8")
-    for line in textIns:
-        indexCount = indexCount + 1
-        maFontTag = reFontTag.match(line)
-        maConstantIndex = reConstantTag.match(line)
-        maConstantText = reConstantTag.match(line)
-        maEmptyLine = reEmptyLine.match(line)
-        conIndex = ""
-        conText = ""
-        if maEmptyLine:
-            textLines.append(line)
-            continue
-        if maFontTag:
-            textLines.append(line)
-            continue
-        if maConstantIndex or maConstantText:
-            if maConstantIndex:
-                conIndex = maConstantIndex.group(1)
-            if maConstantText:
-                conText = maConstantText.group(2)
-            lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, indexPrefix + str(indexCount), conText)
-            textLines.append(lineOut)
-    textIns.close()
-    # --Write Output ------------------------------------------------------
-    out = open("output.txt", 'w', encoding="utf8")
-    for i in range(len(textLines)):
-        lineOut = textLines[i]
-        out.write(lineOut)
-    out.close()
+
+    with open(txtFilename, 'r', encoding="utf8") as textIns:
+        for indexCount, line in enumerate(textIns, start=1):
+            maFontTag = reFontTag.match(line)
+            maConstantIndex = reConstantTag.match(line)
+            maConstantText = reConstantTag.match(line)
+            maEmptyLine = reEmptyLine.match(line)
+            conIndex = ""
+            conText = ""
+
+            if maEmptyLine:
+                textLines.append(line)
+                continue
+            if maFontTag:
+                textLines.append(line)
+                continue
+            if maConstantIndex or maConstantText:
+                if maConstantIndex:
+                    conIndex = maConstantIndex.group(1)
+                if maConstantText:
+                    conText = maConstantText.group(2)
+                if conIndex not in no_prefix_indexes:
+                    lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, indexPrefix + str(indexCount), conText)
+                else:
+                    lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
+                textLines.append(lineOut)
+
+    with open("output.txt", 'w', encoding="utf8") as out:
+        for i in range(len(textLines)):
+            lineOut = textLines[i]
+            out.write(lineOut)
 
 
 @mainFunction
