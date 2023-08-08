@@ -546,8 +546,10 @@ def combineClientFiles(client_filename, pregame_filename):
 
 
 @mainFunction
-def createWeblateFile(input_filename):
-    """Read output.txt from combineClientFiles save it as a yaml file for use with weblate."""
+def createWeblateFile(input_filename, langValue):
+    """Read output.txt from combineClientFiles and specify the langValue
+    such as turkish to use as the name of the translated string and save
+    the resulting text as a yaml file for use with weblate."""
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
     output_filename = os.path.splitext(input_filename)[0] + ".yaml"
 
@@ -578,7 +580,7 @@ def createWeblateFile(input_filename):
             # Use double quotes around the placeholder and escape single quotes inside conText
             weblate_file.write('{}:\n'.format(conIndex))
             weblate_file.write('  english: "{}"\n'.format(conText))
-            weblate_file.write('  turkish: "{}"\n'.format(conText))
+            weblate_file.write('  {}: "{}"\n'.format(langValue, conText))
 
 
 @mainFunction
