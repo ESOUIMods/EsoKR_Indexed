@@ -3,10 +3,12 @@
 import argparse
 import re
 import struct
-import io
+import os
 import sys
 import codecs
 from difflib import SequenceMatcher
+from ruamel.yaml.scalarstring import PreservedScalarString
+import ruamel.yaml
 import section_constants as section
 
 # ------------------------------------------------------------------------------
@@ -70,6 +72,10 @@ def mainFunction(func):
     callables.add(func)
     return func
 
+
+# Helper for escaped chars ----------------------------------------------------
+def escape_special_characters(text):
+    return text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace(r'\\\"', r'\"')
 
 # Conversion ------------------------------------------------------------------
 # (txtFilename, idFilename)
@@ -221,7 +227,7 @@ def esoToKorean(txtFilename):
 @mainFunction
 def addIndexToEosui(txtFilename):
     """Add tags to either kr_client.str or kr_pregame.str for use with translation files."""
-    reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
+    reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
     reFontTag = re.compile(r'^\[Font:(.+?)')
     reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
 
@@ -291,46 +297,42 @@ def removeIndexFromEosui(txtFilename):
     reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
 
     textLines = []
-    # Get ID numbers ------------------------------------------------------
-    textIns = open(txtFilename, 'r', encoding="utf8")
-    for line in textIns:
-        line = line.rstrip()
-        maFontTag = reFontTag.match(line)
-        maConstantTagNew = reConstantTagNew.match(line)
-        maConstantTagOld = reConstantTagOld.match(line)
-        maConstantTagOlder = reConstantTagOlder.match(line)
-        maEmptyLine = reEmptyLine.match(line)
-        conIndex = ""
-        conText = ""
-        if maEmptyLine:
-            textLines.append(line + "\n")
-            continue
-        if maFontTag:
-            textLines.append(line + "\n")
-            continue
-        if maConstantTagOlder and not maFontTag:
-            conIndex = maConstantTagOlder.group(1)
-            conText = maConstantTagOlder.group(2)
-            newString = conText.replace(conIndex + " ", "")
-            lineOut = '[{}] = "{}"\n'.format(conIndex, newString)
-            textLines.append(lineOut)
-        if maConstantTagOld and not maFontTag:
-            conIndex = maConstantTagOld.group(1)
-            conText = maConstantTagOld.group(3)
-            lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
-            textLines.append(lineOut)
-        if maConstantTagNew and not maFontTag:
-            conIndex = maConstantTagNew.group(1)
-            conText = maConstantTagNew.group(5)
-            lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
-            textLines.append(lineOut)
-    textIns.close()
-    # --Write Output ------------------------------------------------------
-    out = open("output.txt", 'w', encoding="utf8")
-    for i in range(len(textLines)):
-        lineOut = textLines[i]
-        out.write(lineOut)
-    out.close()
+
+    with open(txtFilename, 'r', encoding="utf8") as textIns:
+        for line in textIns:
+            line = line.rstrip()
+            maFontTag = reFontTag.match(line)
+            maConstantTagNew = reConstantTagNew.match(line)
+            maConstantTagOld = reConstantTagOld.match(line)
+            maConstantTagOlder = reConstantTagOlder.match(line)
+            maEmptyLine = reEmptyLine.match(line)
+            conIndex = ""
+            conText = ""
+
+            if maEmptyLine or maFontTag:
+                textLines.append(line + "\n")
+                continue
+
+            if maConstantTagOlder:
+                conIndex = maConstantTagOlder.group(1)
+                conText = maConstantTagOlder.group(2)
+                newString = conText.replace(conIndex + " ", "")
+                lineOut = '[{}] = "{}"\n'.format(conIndex, newString)
+                textLines.append(lineOut)
+            elif maConstantTagOld:
+                conIndex = maConstantTagOld.group(1)
+                conText = maConstantTagOld.group(3)
+                lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
+                textLines.append(lineOut)
+            elif maConstantTagNew:
+                conIndex = maConstantTagNew.group(1)
+                conText = maConstantTagNew.group(5)
+                lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
+                textLines.append(lineOut)
+
+    with open("output.txt", 'w', encoding="utf8") as out:
+        for lineOut in textLines:
+            out.write(lineOut)
 
 
 currentFileIndexes = {}
@@ -481,6 +483,137 @@ def readCurrentLangFile(currentLanguageFile):
 
 
 @mainFunction
+def combineClientFiles(client_filename, pregame_filename):
+    """Read in client and pregame files and save the combined information to
+    output.txt as one file to avoid duplication of constant equal to string combinations."""
+    reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
+    textLines = []
+    conIndex_set = set()
+
+    def extract_constant(line):
+        conIndex = None
+        conText = None
+        match = reConstantTag.match(line)
+        if match:
+            conIndex, conText = match.groups()
+            if conText == "":
+                conText = '""'  # Set conText as two double quotes
+        return conIndex, conText
+
+    def add_line(line, conIndex, conText):
+        if conIndex not in conIndex_set:
+            escaped_conText = escape_special_characters(conText)
+            textLines.append('[{}] = "{}"\n'.format(conIndex, escaped_conText))
+            conIndex_set.add(conIndex)
+
+    # Process client.str file
+    with open(client_filename, 'r', encoding="utf8") as textInsClient:
+        for line in textInsClient:
+            line = line.rstrip()
+            if line.startswith("["):
+                conIndex, conText = extract_constant(line)
+                add_line(line, conIndex, conText)
+            else:
+                textLines.append(line + "\n")
+
+    # Process pregame.str file
+    with open(pregame_filename, 'r', encoding="utf8") as textInsPregame:
+        for line in textInsPregame:
+            line = line.rstrip()
+            if line.startswith("["):
+                conIndex, conText = extract_constant(line)
+                add_line(line, conIndex, conText)
+            else:
+                textLines.append(line + "\n")
+
+    # Write output to output.txt
+    with open("output.txt", 'w', encoding="utf8") as out:
+        for lineOut in textLines:
+            out.write(lineOut)
+
+
+@mainFunction
+def createWeblateFile(input_filename):
+    """Read output.txt from combineClientFiles save it as a yaml file for use with weblate."""
+    reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
+    output_filename = os.path.splitext(input_filename)[0] + ".yaml"
+
+    try:
+        with open(input_filename, 'r', encoding="utf8") as textIns:
+            translations = {}
+            for line in textIns:
+                match = reConstantTag.match(line)
+                if match:
+                    conIndex, conText = match.groups()
+                    translations[conIndex] = conText
+    except FileNotFoundError:
+        print("{} not found. Aborting.".format(input_filename))
+        return
+
+    if not translations:
+        print("No translations found in {}. Aborting.".format(input_filename))
+        return
+
+    first_conIndex = list(translations.keys())[0]
+    if not first_conIndex.startswith("SI_"):
+        print("First conIndex '{}' does not start with 'SI_'. Aborting.".format(first_conIndex))
+        return
+
+    # Generate the YAML-like output
+    with open(output_filename, 'w', encoding="utf8") as weblate_file:
+        for conIndex, conText in translations.items():
+            # Use double quotes around the placeholder and escape single quotes inside conText
+            weblate_file.write('{}:\n'.format(conIndex))
+            weblate_file.write('  english: "{}"\n'.format(conText))
+            weblate_file.write('  turkish: "{}"\n'.format(conText))
+
+
+@mainFunction
+def importClientTranslations(inputYaml, inputClientFile):
+    """Read inputYaml from createWeblateFile and either the client.str
+    or pregame.str file and update the translated text langValue."""
+    reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
+    translations = {}
+
+    # Read the translations from the YAML file
+    yaml = ruamel.yaml.YAML()
+    yaml.preserve_quotes = True
+    with open(inputYaml, 'r', encoding="utf8") as yaml_file:
+        yaml_data = yaml.load(yaml_file)
+
+    # Access the YAML items
+    for conIndex, conText in yaml_data.items():
+        translations[conIndex] = {
+            'english': conText['english'],
+            'turkish': conText['turkish'],
+        }
+
+    # Update translations from the inputClientFile
+    with open(inputClientFile, 'r', encoding="utf8") as textIns:
+        for line in textIns:
+            match = reConstantTag.match(line)
+            if match:
+                conIndex, conText = match.groups()
+                if conIndex in translations and conText != translations[conIndex]['english']:
+                    translations[conIndex]['turkish'] = conText
+
+    # Generate the updated YAML-like output with double-quoted scalars and preserved formatting
+    output_filename = os.path.splitext(inputYaml)[0] + "_updated.yaml"
+    with open(output_filename, 'w', encoding="utf8") as updatedFile:
+        for conIndex, values in translations.items():
+            escaped_english_text = escape_special_characters(values['english'])
+            escaped_turkish_text = escape_special_characters(values['turkish'])
+            yaml_text = (
+                "{}:\n  english: \"{}\"\n  turkish: \"{}\"\n".format(
+                    conIndex, escaped_english_text, escaped_turkish_text
+                )
+            )
+            updatedFile.write(yaml_text)
+
+    print("Updated translations saved to {}.".format(output_filename))
+
+
+@mainFunction
 def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
     """replaced with: diffEsouiText
 
@@ -488,7 +621,7 @@ def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
     Untested, previously attempted to merge en_client.str and kb_client.str
     """
 
-    reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
+    reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
     reFontTag = re.compile(r'^\[Font:(.+?)')
     reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
 
@@ -554,7 +687,7 @@ def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
 @mainFunction
 def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
     """Untested: Merges either kb.lang or kr.lang with updated translations for current live server files."""
-    reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
+    reLangConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
 
     def isTranslatedText(line):
         for char in range(0, len(line)):
@@ -568,14 +701,14 @@ def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
     # Get ID numbers ------------------------------------------------------
     textIns = open(translatedFilename, 'r', encoding="utf8")
     for line in textIns:
-        maConstantText = reConstantTag.match(line)
+        maConstantText = reLangConstantTag.match(line)
         conIndex = maConstantText.group(1)
         conText = maConstantText.group(2)
         textTranslatedDict[conIndex] = conText
     textIns.close()
     textIns = open(unTranslatedFilename, 'r', encoding="utf8")
     for line in textIns:
-        maConstantText = reConstantTag.match(line)
+        maConstantText = reLangConstantTag.match(line)
         conIndex = maConstantText.group(1)
         conText = maConstantText.group(2)
         textUntranslatedDict[conIndex] = conText
@@ -615,7 +748,7 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     unTranslatedLiveFilename: example en_prv.lang_tag.txt
     unTranslatedPTSFilename: example en_cur.lang_tag.txt
     """
-    reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
+    reLangConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
     reColorTagStart = re.compile(r'(\|c[0-9a-zA-Z]{1,6})')
     reColorTagEnd = re.compile(r'(\|r)')
     reControlChar = re.compile(r'(\^f|\^n|\^F|\^N|\^p|\^P)')
@@ -653,7 +786,7 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     # Get Previous Translation ------------------------------------------------------
     textIns = open(translatedFilename, 'r', encoding="utf8")
     for line in textIns:
-        maConstantText = reConstantTag.match(line)
+        maConstantText = reLangConstantTag.match(line)
         if maConstantText:
             conIndex = maConstantText.group(1)
             conText = maConstantText.group(2)
@@ -662,7 +795,7 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     # Get Previous/Live English Text ------------------------------------------------------
     textIns = open(unTranslatedLiveFilename, 'r', encoding="utf8")
     for line in textIns:
-        maConstantText = reConstantTag.match(line)
+        maConstantText = reLangConstantTag.match(line)
         if maConstantText:
             conIndex = maConstantText.group(1)
             conText = maConstantText.group(2)
@@ -671,8 +804,8 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     # Get Current/PTS English Text ------------------------------------------------------
     textIns = open(unTranslatedPTSFilename, 'r', encoding="utf8")
     for line in textIns:
-        maConstantIndex = reConstantTag.match(line)
-        maConstantText = reConstantTag.match(line)
+        maConstantIndex = reLangConstantTag.match(line)
+        maConstantText = reLangConstantTag.match(line)
         if maConstantIndex or maConstantText:
             conIndex = maConstantText.group(1)
             conText = maConstantText.group(2)
@@ -776,7 +909,7 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
 @mainFunction
 def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
     """Reads live and pts en_client.str or en_pregame.str and if text is the same uses existing translation."""
-    reConstantTag = re.compile(r'^\[(.+?)\] = "(.+?)"$')
+    reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
     reFontTag = re.compile(r'^\[Font:(.+?)')
     reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
 
@@ -886,7 +1019,7 @@ def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
 @mainFunction
 def diffEnglishLangFiles(LiveFilename, ptsFilename):
     """Determines the differences between the current and pts en.lang after converted to text and tagged."""
-    reConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
+    reLangConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
     reColorTagStart = re.compile(r'(\|c[0-9a-zA-Z]{1,6})')
     reColorTagEnd = re.compile(r'(\|r)')
     reControlChar = re.compile(r'(\^f|\^n|\^F|\^N|\^p|\^P)')
@@ -896,8 +1029,8 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     # Get Previous/Live English Text ------------------------------------------------------
     textIns = open(LiveFilename, 'r', encoding="utf8")
     for line in textIns:
-        maConstantIndex = reConstantTag.match(line)
-        maConstantText = reConstantTag.match(line)
+        maConstantIndex = reLangConstantTag.match(line)
+        maConstantText = reLangConstantTag.match(line)
         conIndex = ""
         conText = None
         if maConstantIndex or maConstantText:
@@ -910,8 +1043,8 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     # Get Current/PTS English Text ------------------------------------------------------
     textIns = open(ptsFilename, 'r', encoding="utf8")
     for line in textIns:
-        maConstantIndex = reConstantTag.match(line)
-        maConstantText = reConstantTag.match(line)
+        maConstantIndex = reLangConstantTag.match(line)
+        maConstantText = reLangConstantTag.match(line)
         conIndex = ""
         conText = None
         if maConstantIndex or maConstantText:
