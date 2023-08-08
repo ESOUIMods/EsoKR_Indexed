@@ -11,6 +11,7 @@ from ruamel.yaml.scalarstring import PreservedScalarString
 import ruamel.yaml
 import section_constants as section
 
+
 # ------------------------------------------------------------------------------
 class Callables:
     def __init__(self):
@@ -24,7 +25,7 @@ class Callables:
         if callKey in self.callObjs:
             print(self.callObjs[callKey].__doc__)
         else:
-            print(f"Unknown function/object: {callKey}")
+            print("Unknown function/object: {}".format(callKey))
 
     def main(self):
         callKey, *args = sys.argv[1:]
@@ -34,7 +35,7 @@ class Callables:
             return
 
         if callKey not in self.callObjs:
-            print(f"Unknown function/object: {callKey}")
+            print("Unknown function/object: {}".format(callKey))
             return
 
         callObj = self.callObjs[callKey]
@@ -60,7 +61,10 @@ class Callables:
             else:
                 argDex += 1
 
-        callObj(*args, **keywords)
+        if isinstance(callObj, str):
+            callObj = eval(callObj)
+
+        callObj(*args, **keywords)  # Use **keywords here
 
 
 # Callables Singleton
@@ -76,6 +80,7 @@ def mainFunction(func):
 # Helper for escaped chars ----------------------------------------------------
 def escape_special_characters(text):
     return text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace(r'\\\"', r'\"')
+
 
 # Conversion ------------------------------------------------------------------
 # (txtFilename, idFilename)
@@ -342,8 +347,12 @@ previousFileStrings = {}
 translatedFileIndexes = {}
 translatedFileStrings = {}
 
+
 def readUInt32(file): return struct.unpack('>I', file.read(4))[0]
+
+
 def writeUInt32(file, value): file.write(struct.pack('>I', value))
+
 
 def readNullStringByChar(offset, start, file):
     """Reads one byte and any subsequent bytes of a multi byte sequence."""
@@ -383,6 +392,7 @@ def readNullStringByChar(offset, start, file):
     file.seek(currentPosition)
     return textLine
 
+
 def readNullString(offset, start, file):
     """Reads the amount of bytes of chunkSize and looks for a null char then returns a string."""
     chunkSize = 1024
@@ -405,6 +415,7 @@ def readNullString(offset, start, file):
             textLine += chunk
     file.seek(currentPosition)
     return textLine
+
 
 def readLangFile(languageFileName):
     with open(languageFileName, 'rb') as lineIn:
@@ -444,6 +455,7 @@ def readLangFile(languageFileName):
 
     return fileIndexes, fileStrings
 
+
 def writeLangFile(languageFileName, fileIndexes, fileStrings):
     numIndexes = fileIndexes['numIndexes']
     numSections = fileIndexes['numSections']
@@ -472,6 +484,7 @@ def writeLangFile(languageFileName, fileIndexes, fileStrings):
             currentDict = fileStrings[index]
             currentString = currentDict['string']
             indexOut.write(currentString + b'\x00')
+
 
 @mainFunction
 def readCurrentLangFile(currentLanguageFile):
@@ -572,10 +585,6 @@ def createWeblateFile(input_filename):
 def importClientTranslations(inputYaml, inputClientFile, langValue):
     """Read inputYaml from createWeblateFile and either the client.str
     or pregame.str file and update the translated text langValue."""
-
-    if langValue is None or not isinstance(langValue, str):
-        print("The argument langValue is not present or not a string. Aborting...")
-        return
 
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
     translations = {}
@@ -758,10 +767,10 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     reColorTagEnd = re.compile(r'(\|r)')
     reControlChar = re.compile(r'(\^f|\^n|\^F|\^N|\^p|\^P)')
 
-    #-- removeUnnecessaryText
+    # -- removeUnnecessaryText
     reColorTagError = re.compile(r'(\|c000000)(\|c[0-9a-zA-Z]{6,6})')
 
-    #-- removeUnnecessaryText not Used yet, BETA
+    # -- removeUnnecessaryText not Used yet, BETA
     def removeUnnecessaryText(line):
         maColorTagError = reColorTagError.match(line)
         if maColorTagError:
@@ -826,14 +835,14 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
         translatedTextStripped = None
         liveTextStripped = None
         ptsTextStripped = None
-        #-- Strip Odd Chars
+        # -- Strip Odd Chars
         if translatedText is not None:
             translatedTextStripped = stripWeirdChars(translatedText)
         if liveText is not None:
             liveTextStripped = stripWeirdChars(liveText)
         if ptsText is not None:
             ptsTextStripped = stripWeirdChars(ptsText)
-        #-- Assign lineOut to ptsText
+        # -- Assign lineOut to ptsText
         lineOut = ptsText
         hasExtendedChars = False
         hasTranslation = False
@@ -854,7 +863,7 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
             # Strip Control Chars ^n ^f ^p
             subLiveText = reControlChar.sub('', subLiveText)
             subPtsText = reControlChar.sub('', subPtsText)
-            #-- Get Ratio
+            # -- Get Ratio
             s = SequenceMatcher(None, subLiveText, subPtsText)
             if (liveTextStripped == ptsTextStripped) or (s.ratio() > 0.6):
                 liveAndPtsGreaterThanThreshold = True
@@ -873,12 +882,12 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
             # Strip Control Chars ^n ^f ^p
             subTranslatedText = reControlChar.sub('', subTranslatedText)
             subPtsText = reControlChar.sub('', subPtsText)
-            #-- Get Ratio
+            # -- Get Ratio
             s = SequenceMatcher(None, subTranslatedText, subPtsText)
             if (translatedTextStripped == ptsTextStripped) or (s.ratio() > 0.6):
                 translatedAndPtsGreaterThanThreshold = True
         writeOutput = False
-        #-- Determine if there is a questionable comparison
+        # -- Determine if there is a questionable comparison
         if translatedTextStripped is not None and ptsTextStripped is not None and not translatedAndPtsGreaterThanThreshold and not hasExtendedChars:
             if (translatedTextStripped != ptsTextStripped):
                 hasTranslation = True
@@ -889,18 +898,18 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
             hasTranslation = True
         if translatedTextStripped is None:
             hasTranslation = False
-        #-- changes between live and pts requires new translation
+        # -- changes between live and pts requires new translation
         if liveTextStripped is not None and ptsTextStripped is not None:
             if not liveAndPtsGreaterThanThreshold:
                 hasTranslation = False
-        #-- New Line from ptsText that did not exist previously
+        # -- New Line from ptsText that did not exist previously
         if liveTextStripped is None and ptsTextStripped is not None:
             hasTranslation = False
 
         if hasTranslation:
             lineOut = translatedText
         lineOut = '{{{{{}:}}}}{}\n'.format(key, lineOut.rstrip())
-        #-- Save questionable comparison to verify
+        # -- Save questionable comparison to verify
         if writeOutput:
             verifyOut.write('{{{{{}:}}}}{}\n'.format(key, translatedText.rstrip()))
             verifyOut.write('{{{{{}:}}}}{}\n'.format(key, liveText.rstrip()))
