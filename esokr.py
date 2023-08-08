@@ -569,7 +569,7 @@ def createWeblateFile(input_filename):
 
 
 @mainFunction
-def importClientTranslations(inputYaml, inputClientFile):
+def importClientTranslations(inputYaml, inputClientFile, langValue):
     """Read inputYaml from createWeblateFile and either the client.str
     or pregame.str file and update the translated text langValue."""
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
@@ -585,7 +585,7 @@ def importClientTranslations(inputYaml, inputClientFile):
     for conIndex, conText in yaml_data.items():
         translations[conIndex] = {
             'english': conText['english'],
-            'turkish': conText['turkish'],
+            langValue: conText[langValue],  # Use langValue as the key for the specified language
         }
 
     # Update translations from the inputClientFile
@@ -595,17 +595,17 @@ def importClientTranslations(inputYaml, inputClientFile):
             if match:
                 conIndex, conText = match.groups()
                 if conIndex in translations and conText != translations[conIndex]['english']:
-                    translations[conIndex]['turkish'] = conText
+                    translations[conIndex][langValue] = conText  # Update the specified language
 
     # Generate the updated YAML-like output with double-quoted scalars and preserved formatting
     output_filename = os.path.splitext(inputYaml)[0] + "_updated.yaml"
     with open(output_filename, 'w', encoding="utf8") as updatedFile:
         for conIndex, values in translations.items():
             escaped_english_text = escape_special_characters(values['english'])
-            escaped_turkish_text = escape_special_characters(values['turkish'])
+            escaped_lang_text = escape_special_characters(values[langValue])  # Use langValue here
             yaml_text = (
-                "{}:\n  english: \"{}\"\n  turkish: \"{}\"\n".format(
-                    conIndex, escaped_english_text, escaped_turkish_text
+                "{}:\n  english: \"{}\"\n  {}: \"{}\"\n".format(
+                    conIndex, escaped_english_text, langValue, escaped_lang_text
                 )
             )
             updatedFile.write(yaml_text)
