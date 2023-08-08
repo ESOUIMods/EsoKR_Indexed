@@ -237,6 +237,9 @@ def addIndexToEosui(txtFilename):
     reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
 
     no_prefix_indexes = [
+        "SI_PLAYER_NAME",
+        "SI_PLAYER_NAME_WITH_TITLE_FORMAT",
+        "SI_MEGASERVER0",
         "SI_MEGASERVER1",
         "SI_MEGASERVER2",
         "SI_KEYBINDINGS_LAYER_BATTLEGROUNDS",
@@ -498,7 +501,7 @@ def readCurrentLangFile(currentLanguageFile):
 @mainFunction
 def combineClientFiles(client_filename, pregame_filename):
     """Read in client and pregame files and save the combined information to
-    output.txt as one file to avoid duplication of constant equal to string combinations."""
+    output.txt as one file to avoid duplication of SI_ constants."""
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
     textLines = []
     conIndex_set = set()
@@ -748,178 +751,137 @@ def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
     out.close()
 
 
-@mainFunction
-def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslatedPTSFilename):
-    """Read live and pts en.lang, if text is unchanged use existing translation.
+textUntranslatedLiveDict = {}
+textUntranslatedPTSDict = {}
+textTranslatedDict = {}
 
-    translatedFilename: will almost always be kb.lang.txt
-    unTranslatedLiveFilename: should be the previous en.lang converted to text and then the tags added. This can be
-    en_live.lang_tag.txt or en_prv.lang_tag.txt. Anything that indicates it is older or the the previous en.lang from
-    a previous chapter or patch
-    unTranslatedPTSFilename: should be the current en.lang converted to text and then the tags added. This should be
-    from the current en.lang from the current version after the chapter or the patch is released. This can be either
-    en_pts.lang_tag.txt or en_cur.lang_tag.txt
 
-    translatedFilename: example kb.lang.txt or kr.lang_tag.txt
-    unTranslatedLiveFilename: example en_prv.lang_tag.txt
-    unTranslatedPTSFilename: example en_cur.lang_tag.txt
-    """
+def readTaggedLangFile(taggedFile, targetDict):
     reLangConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
-    reColorTagStart = re.compile(r'(\|c[0-9a-zA-Z]{1,6})')
-    reColorTagEnd = re.compile(r'(\|r)')
-    reControlChar = re.compile(r'(\^f|\^n|\^F|\^N|\^p|\^P)')
 
-    # -- removeUnnecessaryText
-    reColorTagError = re.compile(r'(\|c000000)(\|c[0-9a-zA-Z]{6,6})')
+    with open(taggedFile, 'r', encoding="utf8") as textIns:
+        for line in textIns:
+            maConstantText = reLangConstantTag.match(line)
+            if maConstantText:
+                conIndex = maConstantText.group(1)
+                conText = maConstantText.group(2)
+                targetDict[conIndex] = conText
 
-    # -- removeUnnecessaryText not Used yet, BETA
-    def removeUnnecessaryText(line):
-        maColorTagError = reColorTagError.match(line)
-        if maColorTagError:
-            line = line.replace("|c000000", "")
-        return line
 
-    def stripWeirdChars(line):
-        # Strip weird dots … or other chars
-        # …, —, â€¦
-        lineBytes = bytes(line, 'utf-8')
-        lineBytes = lineBytes.replace(b'\xe2\x80\xa6', b'')
-        lineBytes = lineBytes.replace(b'\xe2\x80\x94', b'')
-        lineBytes = lineBytes.replace(b'\xc3\xa2\xe2\x82\xac\xc2\xa6', b'')
-        line = lineBytes.decode('utf-8')
-        return line
-
-    def isTranslatedText(line):
-        for char in range(0, len(line)):
-            returnedBytes = bytes(line[char], 'utf-8')
-            length = len(returnedBytes)
-            if length > 1: return True
+def cleanText(line):
+    if line is None:
         return None
 
-    textTranslatedDict = {}
-    textUntranslatedLiveDict = {}
-    textUntranslatedPTSDict = {}
+    # Strip weird dots … or other chars
+    line = line.replace('…', '').replace('—', '').replace('â€¦', '')
+
+    # Remove unnecessary color tags
+    reColorTagError = re.compile(r'(\|c000000)(\|c[0-9a-zA-Z]{6,6})')
+    maColorTagError = reColorTagError.match(line)
+    if maColorTagError:
+        line = line.replace("|c000000", "")
+
+    return line
+
+
+def calculate_similarity_and_threshold(text1, text2):
+    reColorTag = re.compile(r'\|c[0-9a-zA-Z]{1,6}|\|r')
+    reControlChar = re.compile(r'\^f|\^n|\^F|\^N|\^p|\^P')
+
+    if not text1 or not text2:
+        return False
+
+    subText1 = reColorTag.sub('', text1)
+    subText2 = reColorTag.sub('', text2)
+    subText1 = reControlChar.sub('', subText1)
+    subText2 = reControlChar.sub('', subText2)
+
+    similarity_ratio = SequenceMatcher(None, subText1, subText2).ratio()
+
+    return text1 == text2 or similarity_ratio > 0.6
+
+
+@mainFunction
+def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslatedPTSFilename):
+    """
+    Compare translations between different versions of language files.
+
+    This function compares translations between different versions of language files and writes the results to output files.
+
+    Args:
+        translatedFilename (str): The filename of the translated language file (e.g., kb.lang.txt).
+        unTranslatedLiveFilename (str): The filename of the previous/live English language file with tags (e.g., en_prv.lang_tag.txt).
+        unTranslatedPTSFilename (str): The filename of the current/PTS English language file with tags (e.g., en_cur.lang_tag.txt).
+
+    Notes:
+        - `translatedFilename` should be the translated language file, usually for another language.
+        - `unTranslatedLiveFilename` should be the previous/live English language file with tags.
+        - `unTranslatedPTSFilename` should be the current/PTS English language file with tags.
+        - The output is written to "output.txt" and "verify_output.txt" files.
+
+    The function performs the following steps:
+    - Reads the translations from the specified files into dictionaries.
+    - Cleans and preprocesses the texts by removing unnecessary characters and color tags.
+    - Compares the PTS and live texts to determine if translation changes are needed.
+    - Writes the output to "output.txt" with potential new translations and to "verify_output.txt" for verification purposes.
+    """
+
+    def isTranslatedText(line):
+        return any(ord(char) > 127 for char in line)
+
     # Get Previous Translation ------------------------------------------------------
-    textIns = open(translatedFilename, 'r', encoding="utf8")
-    for line in textIns:
-        maConstantText = reLangConstantTag.match(line)
-        if maConstantText:
-            conIndex = maConstantText.group(1)
-            conText = maConstantText.group(2)
-            textTranslatedDict[conIndex] = conText
-    textIns.close()
+    readTaggedLangFile(translatedFilename, textTranslatedDict)
     # Get Previous/Live English Text ------------------------------------------------------
-    textIns = open(unTranslatedLiveFilename, 'r', encoding="utf8")
-    for line in textIns:
-        maConstantText = reLangConstantTag.match(line)
-        if maConstantText:
-            conIndex = maConstantText.group(1)
-            conText = maConstantText.group(2)
-            textUntranslatedLiveDict[conIndex] = conText
-    textIns.close()
+    readTaggedLangFile(unTranslatedLiveFilename, textUntranslatedLiveDict)
     # Get Current/PTS English Text ------------------------------------------------------
-    textIns = open(unTranslatedPTSFilename, 'r', encoding="utf8")
-    for line in textIns:
-        maConstantIndex = reLangConstantTag.match(line)
-        maConstantText = reLangConstantTag.match(line)
-        if maConstantIndex or maConstantText:
-            conIndex = maConstantText.group(1)
-            conText = maConstantText.group(2)
-            textUntranslatedPTSDict[conIndex] = conText
-    textIns.close()
+    readTaggedLangFile(unTranslatedPTSFilename, textUntranslatedPTSDict)
     # Compare PTS with Live text, write output -----------------------------------------
-    out = open("output.txt", 'w', encoding="utf8")
-    verifyOut = open("verify_output.txt", 'w', encoding="utf8")
-    for key in textUntranslatedPTSDict:
-        translatedText = textTranslatedDict.get(key)
-        liveText = textUntranslatedLiveDict.get(key)
-        ptsText = textUntranslatedPTSDict.get(key)
-        translatedTextStripped = None
-        liveTextStripped = None
-        ptsTextStripped = None
-        # -- Strip Odd Chars
-        if translatedText is not None:
-            translatedTextStripped = stripWeirdChars(translatedText)
-        if liveText is not None:
-            liveTextStripped = stripWeirdChars(liveText)
-        if ptsText is not None:
-            ptsTextStripped = stripWeirdChars(ptsText)
-        # -- Assign lineOut to ptsText
-        lineOut = ptsText
-        hasExtendedChars = False
-        hasTranslation = False
-        if translatedTextStripped is not None:
-            hasExtendedChars = isTranslatedText(translatedTextStripped)
-        # ---Determine Change Ratio between Live and Pts---
-        liveAndPtsGreaterThanThreshold = False
-        hasLiveAndPts = False
-        if liveTextStripped is not None and ptsTextStripped is not None:
-            hasLiveAndPts = True
-            subLiveText = liveTextStripped
-            subPtsText = ptsTextStripped
-            # Strip color codes
-            subLiveText = reColorTagStart.sub('', subLiveText)
-            subLiveText = reColorTagEnd.sub('', subLiveText)
-            subPtsText = reColorTagStart.sub('', subPtsText)
-            subPtsText = reColorTagEnd.sub('', subPtsText)
-            # Strip Control Chars ^n ^f ^p
-            subLiveText = reControlChar.sub('', subLiveText)
-            subPtsText = reControlChar.sub('', subPtsText)
-            # -- Get Ratio
-            s = SequenceMatcher(None, subLiveText, subPtsText)
-            if (liveTextStripped == ptsTextStripped) or (s.ratio() > 0.6):
-                liveAndPtsGreaterThanThreshold = True
-        # ---Determine Change Ratio between Translated and Pts ---
-        translatedAndPtsGreaterThanThreshold = False
-        hasTranslatedAndPts = False
-        if translatedTextStripped is not None and ptsTextStripped is not None:
-            hasTranslatedAndPts = True
-            subTranslatedText = translatedTextStripped
-            subPtsText = ptsTextStripped
-            # Strip color codes
-            subTranslatedText = reColorTagStart.sub('', subTranslatedText)
-            subTranslatedText = reColorTagEnd.sub('', subTranslatedText)
-            subPtsText = reColorTagStart.sub('', subPtsText)
-            subPtsText = reColorTagEnd.sub('', subPtsText)
-            # Strip Control Chars ^n ^f ^p
-            subTranslatedText = reControlChar.sub('', subTranslatedText)
-            subPtsText = reControlChar.sub('', subPtsText)
-            # -- Get Ratio
-            s = SequenceMatcher(None, subTranslatedText, subPtsText)
-            if (translatedTextStripped == ptsTextStripped) or (s.ratio() > 0.6):
-                translatedAndPtsGreaterThanThreshold = True
-        writeOutput = False
-        # -- Determine if there is a questionable comparison
-        if translatedTextStripped is not None and ptsTextStripped is not None and not translatedAndPtsGreaterThanThreshold and not hasExtendedChars:
-            if (translatedTextStripped != ptsTextStripped):
-                hasTranslation = True
-                writeOutput = True
-
-        # Determine translation state ------------------------------
-        if not hasTranslation and hasExtendedChars:
-            hasTranslation = True
-        if translatedTextStripped is None:
-            hasTranslation = False
-        # -- changes between live and pts requires new translation
-        if liveTextStripped is not None and ptsTextStripped is not None:
-            if not liveAndPtsGreaterThanThreshold:
+    with open("output.txt", 'w', encoding="utf8") as out:
+        with open("verify_output.txt", 'w', encoding="utf8") as verifyOut:
+            for key in textUntranslatedPTSDict:
+                translatedText = textTranslatedDict.get(key)
+                liveText = textUntranslatedLiveDict.get(key)
+                ptsText = textUntranslatedPTSDict.get(key)
+                translatedTextStripped = cleanText(translatedText)
+                liveTextStripped = cleanText(liveText)
+                ptsTextStripped = cleanText(ptsText)
+                # -- Assign lineOut to ptsText
+                lineOut = ptsText
                 hasTranslation = False
-        # -- New Line from ptsText that did not exist previously
-        if liveTextStripped is None and ptsTextStripped is not None:
-            hasTranslation = False
-
-        if hasTranslation:
-            lineOut = translatedText
-        lineOut = '{{{{{}:}}}}{}\n'.format(key, lineOut.rstrip())
-        # -- Save questionable comparison to verify
-        if writeOutput:
-            verifyOut.write('{{{{{}:}}}}{}\n'.format(key, translatedText.rstrip()))
-            verifyOut.write('{{{{{}:}}}}{}\n'.format(key, liveText.rstrip()))
-            verifyOut.write('{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip()))
-            verifyOut.write(lineOut)
-        out.write(lineOut)
-    out.close()
-    verifyOut.close()
+                hasExtendedChars = isTranslatedText(translatedTextStripped)
+                # ---Determine Change Ratio between Live and Pts---
+                liveAndPtsGreaterThanThreshold = calculate_similarity_and_threshold(liveTextStripped, ptsTextStripped)
+                # ---Determine Change Ratio between Translated and Pts ---
+                translatedAndPtsGreaterThanThreshold = calculate_similarity_and_threshold(translatedTextStripped,
+                                                                                          ptsTextStripped)
+                writeOutput = False
+                # -- Determine if there is a questionable comparison
+                if translatedTextStripped and ptsTextStripped and not translatedAndPtsGreaterThanThreshold and not hasExtendedChars:
+                    if translatedTextStripped != ptsTextStripped:
+                        hasTranslation = True
+                        writeOutput = True
+                # Determine translation state ------------------------------
+                if not hasTranslation and hasExtendedChars:
+                    hasTranslation = True
+                if translatedTextStripped is None:
+                    hasTranslation = False
+                # -- changes between live and pts requires new translation
+                if liveTextStripped is not None and ptsTextStripped is not None:
+                    if not liveAndPtsGreaterThanThreshold:
+                        hasTranslation = False
+                # -- New Line from ptsText that did not exist previously
+                if liveTextStripped is None and ptsTextStripped is not None:
+                    hasTranslation = False
+                if hasTranslation:
+                    lineOut = translatedText
+                lineOut = '{{{{{}:}}}}{}\n'.format(key, lineOut.rstrip())
+                # -- Save questionable comparison to verify
+                if writeOutput:
+                    verifyOut.write('{{{{{}:}}}}{}\n'.format(key, translatedText.rstrip()))
+                    verifyOut.write('{{{{{}:}}}}{}\n'.format(key, liveText.rstrip()))
+                    verifyOut.write('{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip()))
+                    verifyOut.write(lineOut)
+                out.write(lineOut)
 
 
 @mainFunction
@@ -1032,50 +994,56 @@ def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
     out.close()
 
 
+def write_output_file(filename, targetList, targetCount, targetString):
+    with open(filename, 'w', encoding="utf8") as out:
+        lineOut = '{}: indexes {}\n'.format(targetCount, targetString)
+        out.write(lineOut)
+        for i in range(len(targetList)):
+            lineOut = targetList[i]
+            out.write(lineOut)
+
+
 @mainFunction
 def diffEnglishLangFiles(LiveFilename, ptsFilename):
-    """Determines the differences between the current and pts en.lang after converted to text and tagged."""
-    reLangConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
-    reColorTagStart = re.compile(r'(\|c[0-9a-zA-Z]{1,6})')
-    reColorTagEnd = re.compile(r'(\|r)')
-    reControlChar = re.compile(r'(\^f|\^n|\^F|\^N|\^p|\^P)')
+    """
+    Compare differences between the current and PTS 'en.lang' files after conversion to text and tagging.
 
-    textUntranslatedLiveDict = {}
-    textUntranslatedPTSDict = {}
+    This function analyzes differences between two versions of 'en.lang' files: the current version and the PTS version.
+    It then categorizes and writes the findings to separate output files.
+
+    Args:
+        LiveFilename (str): The filename of the previous/live 'en.lang' file with tags.
+        ptsFilename (str): The filename of the current/PTS 'en.lang' file with tags.
+
+    Notes:
+        The function reads the translation data from the specified files using the 'readTaggedLangFile' function.
+        The analysis results are categorized into 'matched', 'close match', 'changed', and 'deleted' indexes.
+        Output is written to various output files for further review and analysis.
+
+    The function performs the following steps:
+    - Reads translation data from the specified files into dictionaries.
+    - Compares translations between PTS and live texts, categorizing indexes as 'matched', 'close match', or 'changed'.
+    - Identifies and categorizes new and deleted indexes.
+    - Writes analysis results to separate output files.
+
+    Outputs:
+    - 'matchedIndexes.txt': Indexes that have identical translations in PTS and live versions.
+    - 'closeMatchLiveIndexes.txt': Indexes with translations that are close in similarity between PTS and live versions.
+    - 'closeMatchPtsIndexes.txt': Corresponding PTS translations for 'closeMatchLiveIndexes.txt'.
+    - 'changedIndexes.txt': Indexes with changed translations between PTS and live versions.
+    - 'deletedIndexes.txt': Indexes present in the live version but absent in the PTS version.
+    """
     # Get Previous/Live English Text ------------------------------------------------------
-    textIns = open(LiveFilename, 'r', encoding="utf8")
-    for line in textIns:
-        maConstantIndex = reLangConstantTag.match(line)
-        maConstantText = reLangConstantTag.match(line)
-        conIndex = ""
-        conText = None
-        if maConstantIndex or maConstantText:
-            if maConstantIndex:
-                conIndex = maConstantIndex.group(1)
-            if maConstantText:
-                conText = maConstantText.group(2)
-            textUntranslatedLiveDict[conIndex] = conText
-    textIns.close()
+    readTaggedLangFile(LiveFilename, textUntranslatedLiveDict)
     # Get Current/PTS English Text ------------------------------------------------------
-    textIns = open(ptsFilename, 'r', encoding="utf8")
-    for line in textIns:
-        maConstantIndex = reLangConstantTag.match(line)
-        maConstantText = reLangConstantTag.match(line)
-        conIndex = ""
-        conText = None
-        if maConstantIndex or maConstantText:
-            if maConstantIndex:
-                conIndex = maConstantIndex.group(1)
-            if maConstantText:
-                conText = maConstantText.group(2)
-            textUntranslatedPTSDict[conIndex] = conText
-    textIns.close()
+    readTaggedLangFile(ptsFilename, textUntranslatedPTSDict)
     # Compare PTS with Live text, write output -----------------------------------------
     matchedText = []
     closeMatchLiveText = []
     closeMatchPtsText = []
     changedText = []
     deletedText = []
+    addedText = []
     addedIndexCount = 0
     matchedCount = 0
     closMatchCount = 0
@@ -1087,24 +1055,14 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
         if textUntranslatedLiveDict.get(key) is None:
             addedIndexCount = addedIndexCount + 1
             lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText)
-            matchedText.append(lineOut)
+            addedText.append(lineOut)
             continue
-        subLiveText = liveText
-        subPtsText = ptsText
-        # Strip color codes
-        subLiveText = reColorTagStart.sub('', subLiveText)
-        subLiveText = reColorTagEnd.sub('', subLiveText)
-        subPtsText = reColorTagStart.sub('', subPtsText)
-        subPtsText = reColorTagEnd.sub('', subPtsText)
-        # Strip Control Chars ^n ^f ^p
-        subLiveText = reControlChar.sub('', subLiveText)
-        subPtsText = reControlChar.sub('', subPtsText)
-        s = SequenceMatcher(None, subLiveText, subPtsText)
+        liveAndPtsGreaterThanThreshold = calculate_similarity_and_threshold(liveText, ptsText)
         if liveText == ptsText:
             matchedCount = matchedCount + 1
             lineOut = '{{{{{}:}}}}{}\n'.format(key, ptsText)
             matchedText.append(lineOut)
-        elif s.ratio() > 0.6:
+        elif liveAndPtsGreaterThanThreshold:
             closMatchCount = closMatchCount + 1
             lineOut = '{{{{{}:}}}}{}\n'.format(key, liveText)
             closeMatchLiveText.append(lineOut)
@@ -1125,47 +1083,18 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     print('{}: indexes were a close match'.format(closMatchCount))
     print('{}: indexes changed'.format(changedCount))
     print('{}: indexes deleted'.format(deletedCount))
-    # --Write Output ------------------------------------------------------
-    out = open("matchedIndexes.txt", 'w', encoding="utf8")
-    lineOut = '{}: new indexes added\n'.format(addedIndexCount)
-    out.write(lineOut)
-    lineOut = '{}: indexes matched\n'.format(matchedCount)
-    out.write(lineOut)
-    for i in range(len(matchedText)):
-        lineOut = matchedText[i]
-        out.write(lineOut)
-    out.close()
-    # --Write Output ------------------------------------------------------
-    out = open("closeMatchLiveIndexes.txt", 'w', encoding="utf8")
-    lineOut = '{}: indexes were a close match\n'.format(closMatchCount)
-    out.write(lineOut)
-    for i in range(len(closeMatchLiveText)):
-        lineOut = closeMatchLiveText[i]
-        out.write(lineOut)
-    out.close()
-    out = open("closeMatchPtsIndexes.txt", 'w', encoding="utf8")
-    lineOut = '{}: indexes were a close match\n'.format(closMatchCount)
-    out.write(lineOut)
-    for i in range(len(closeMatchPtsText)):
-        lineOut = closeMatchPtsText[i]
-        out.write(lineOut)
-    out.close()
-    # --Write Output ------------------------------------------------------
-    out = open("changedIndexes.txt", 'w', encoding="utf8")
-    lineOut = '{}: indexes changed\n'.format(changedCount)
-    out.write(lineOut)
-    for i in range(len(changedText)):
-        lineOut = changedText[i]
-        out.write(lineOut)
-    out.close()
-    # --Write Output ------------------------------------------------------
-    out = open("deletedIndexes.txt", 'w', encoding="utf8")
-    lineOut = '{}: indexes deleted\n'.format(deletedCount)
-    out.write(lineOut)
-    for i in range(len(deletedText)):
-        lineOut = deletedText[i]
-        out.write(lineOut)
-    out.close()
+    # Write matched indexes
+    write_output_file("matchedIndexes.txt", matchedText, matchedCount, 'matched')
+    # Write close match Live indexes
+    write_output_file("closeMatchLiveIndexes.txt", closeMatchLiveText, closMatchCount, 'were a close match')
+    # Write close match PTS indexes
+    write_output_file("closeMatchPtsIndexes.txt", closeMatchPtsText, closMatchCount, 'were a close match')
+    # Write changed indexes
+    write_output_file("changedIndexes.txt", changedText, changedCount, 'changed')
+    # Write deleted indexes
+    write_output_file("deletedIndexes.txt", deletedText, deletedCount, 'deleted')
+    # Write added indexes
+    write_output_file("addedIndexes.txt", addedText, addedIndexCount, 'added')
 
 
 if __name__ == "__main__":
