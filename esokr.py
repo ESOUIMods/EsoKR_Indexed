@@ -572,6 +572,11 @@ def createWeblateFile(input_filename):
 def importClientTranslations(inputYaml, inputClientFile, langValue):
     """Read inputYaml from createWeblateFile and either the client.str
     or pregame.str file and update the translated text langValue."""
+
+    if langValue is None or not isinstance(langValue, str):
+        print("The argument langValue is not present or not a string. Aborting...")
+        return
+
     reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
     translations = {}
 
