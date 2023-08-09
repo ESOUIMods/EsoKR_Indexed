@@ -485,7 +485,7 @@ def addIndexToEosui(txtFilename):
                 continue
             elif maClientUntaged:
                 conIndex = maClientUntaged.group(1) or maClientUntaged.group(3)
-                conText = maClientUntaged.group(2) or ""
+                conText = maClientUntaged.group(4) or ""  # Use group 4 for the text content
                 if conIndex not in no_prefix_indexes:
                     lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, indexPrefix + str(indexCount), conText)
                 else:
@@ -1393,6 +1393,42 @@ def test_remove_tags():
             conText = match.group(3)  # Extract the actual text without the tag
             print('[{}] = "{}"'.format(conIndex, conText))
 
+@mainFunction
+def test_add_tags():
+    test_strings = [
+        '[SI_ABANDON_QUEST_CONFIRM] = "Abandon"',
+        '[SI_LOCATION_NAME] = "Gonfalon Bay"',
+        '[SI_ADDONLOADSTATE1] = ""'
+    ]
+
+    indexPrefix = ""
+    testingFilename = "en_client_cur.lua"
+
+    if re.search('client', testingFilename):
+        indexPrefix = "C:"
+    if re.search('pregame', testingFilename):
+        indexPrefix = "P:"
+
+    print("Using reClientUntaged:")
+    for count, string in enumerate(test_strings, start=1):
+        match = reClientUntaged.match(string)
+        if match:
+            conIndex = match.group(1)  # Key (conIndex)
+            conText = match.group(3) if match.group(3) is not None else match.group(4)  # Text content
+            if conText:
+                newString = '[{}] = "{{{}}}{}"'.format(conIndex, indexPrefix + str(count), conText)
+            else:
+                newString = '[{}] = ""'.format(conIndex)
+            print("String #{}:".format(count))
+            print("Group 0:", match.group(0))
+            print("Group 1:", match.group(1))
+            print("Group 2:", match.group(2))
+            print("Group 3:", match.group(3))
+            print("Group 4:", match.group(4))
+            print("conIndex:", conIndex)
+            print("conText:", conText)
+            print(newString)
+            print()
 
 if __name__ == "__main__":
     main()
