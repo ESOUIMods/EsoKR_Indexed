@@ -75,6 +75,24 @@ def main():
         print("No command provided.")
 
 
+# Regular Expressions for Text Processing -------------------------------------
+
+# Matches a language index in the format {{identifier:}}text
+reLangIndex = re.compile(r'^\{\{([^:]+):}}(.+?)$')
+
+# Matches an old-style language index in the format identifier text
+reLangIndexOld = re.compile(r'^(\d{1,10}-\d{1,7}-\d{1,7}) (.+)$')
+
+# Matches untagged client strings or empty lines in the format [key] = "value" or [key] = ""
+reClientUntaged = re.compile(r'^\[(.+?)\] = "(.*?)"$|^(\[.+?\] = "")$')
+
+# Matches tagged client strings in the format [key] = "{tag:value}text"
+reClientTaged = re.compile(r'^\[(.+?)\] = "(\{(?:[CP]:)?([^{}]+)?\})(.+?)"$')
+
+# Matches a font tag in the format [Font:font_name]
+reFontTag = re.compile(r'^\[Font:(.+?)')
+
+
 # Helper for escaped chars ----------------------------------------------------
 def escape_special_characters(text):
     return text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace(r'\\\"', r'\"')
@@ -84,7 +102,45 @@ def escape_special_characters(text):
 # (txtFilename, idFilename)
 @mainFunction
 def addIndexToLangFile(txtFilename, idFilename):
-    """Add tag from either kb.lang or kr.lang files for use with translation files."""
+    """
+    Add numeric identifiers as tags to language entries in a target file.
+
+    This function reads a source text file containing language data and a corresponding identifier file
+    containing unique numeric identifiers for each language entry. It then appends these identifiers as tags
+    to the respective lines in the target language file. The resulting output is saved in a new file named 'output.txt'.
+
+    Args:
+        txtFilename (str): The filename of the source text file containing language data (e.g., 'en.lang.txt').
+        idFilename (str): The filename of the identifier file containing unique numeric identifiers
+                          (e.g., 'en.lang.id.txt').
+
+    Notes:
+        The source text file should contain text data, one entry per line, while the identifier file should
+        contain numeric identifiers corresponding to each entry in the same order.
+
+        The function reads both files, associates numeric identifiers with their respective entries, and appends
+        these identifiers as tags in the output file. The output file is saved in the same directory as the script.
+
+    Example:
+        Given a source text file 'en.lang.txt':
+        ```
+        Hello, world!
+        How are you?
+        ```
+
+        And an identifier file 'en.lang.id.txt':
+        ```
+        18173141-0-2944
+        7949764-0-51729
+        ```
+
+        Calling `addIndexToLangFile('en.lang.txt', 'en.lang.id.txt')` will produce an output file 'output.txt':
+        ```
+        {{18173141-0-2944:}}Hello, world!
+        {{7949764-0-51729:}}How are you?
+        ```
+
+    """
     textLines = []
     idLines = []
 
@@ -106,25 +162,47 @@ def addIndexToLangFile(txtFilename, idFilename):
 
 @mainFunction
 def removeIndexToLangFile(txtFilename):
-    """Remove tag from either kb.lang or kr.lang files for use with official release."""
-    reIndex = re.compile(r'^\{\{(.+):\}\}(.+)$')
-    reIndexOld = re.compile(r'^(\d{1,10}-\d{1,7}-\d{1,7})(.+)$')
+    """
+    Remove numeric identifiers from language entries in a target file.
+
+    This function reads a target text file containing language entries with numeric identifiers as tags
+    and removes these identifiers, resulting in a clean language text file. The output is saved in a new file named 'output.txt'.
+
+    Args:
+        txtFilename (str): The filename of the target text file containing language entries with identifiers (e.g., 'en.lang.txt').
+
+    Notes:
+        The function uses regular expressions to detect and remove numeric identifiers that are enclosed in double curly braces.
+        It then writes the cleaned entries to the output file 'output.txt' in the same directory as the script.
+
+    Example:
+        Given a target text file 'en.lang.txt':
+        ```
+        {{18173141-0-2944:}}Hello, world!
+        {{7949764-0-51729:}}How are you?
+        ```
+
+        Calling `removeIndexToLangFile('en.lang.txt')` will produce an output file 'output.txt':
+        ```
+        Hello, world!
+        How are you?
+        ```
+
+    """
 
     # Get ID numbers ------------------------------------------------------
     textLines = []
 
     with open(txtFilename, 'r', encoding="utf8") as textIns:
         for line in textIns:
-            matchIndex = reIndex.match(line)
-            matchIndexOld = reIndexOld.match(line)
+            matchIndex = reLangIndex.match(line)
+            matchIndexOld = reLangIndexOld.match(line)
             if matchIndex:
-                lead, text = matchIndex.group(1, 2)
+                text = matchIndex.group(2)
                 textLines.append(text)
             if matchIndexOld:
-                lead = matchIndexOld.group(2)
                 text = matchIndexOld.group(2)
-                newString = text.replace(lead + " ", "")
-                newString = newString.lstrip()
+                newString = text.lstrip()
                 textLines.append(newString)
 
     with open("output.txt", 'w', encoding="utf8") as out:
@@ -230,9 +308,6 @@ def esoToKorean(txtFilename):
 @mainFunction
 def addIndexToEosui(txtFilename):
     """Add tags to either kr_client.str or kr_pregame.str for use with translation files."""
-    reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
-    reFontTag = re.compile(r'^\[Font:(.+?)')
-    reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
 
     no_prefix_indexes = [
         "SI_PLAYER_NAME",
@@ -264,23 +339,16 @@ def addIndexToEosui(txtFilename):
     with open(txtFilename, 'r', encoding="utf8") as textIns:
         for indexCount, line in enumerate(textIns, start=1):
             maFontTag = reFontTag.match(line)
-            maConstantIndex = reConstantTag.match(line)
-            maConstantText = reConstantTag.match(line)
-            maEmptyLine = reEmptyLine.match(line)
+            maClientUntaged = reClientUntaged.match(line)
             conIndex = ""
             conText = ""
 
-            if maEmptyLine:
-                textLines.append(line)
-                continue
             if maFontTag:
                 textLines.append(line)
                 continue
-            if maConstantIndex or maConstantText:
-                if maConstantIndex:
-                    conIndex = maConstantIndex.group(1)
-                if maConstantText:
-                    conText = maConstantText.group(2)
+            elif maClientUntaged:
+                conIndex = maClientUntaged.group(1)
+                conText = maClientUntaged.group(2)
                 if conIndex not in no_prefix_indexes:
                     lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, indexPrefix + str(indexCount), conText)
                 else:
@@ -288,20 +356,13 @@ def addIndexToEosui(txtFilename):
                 textLines.append(lineOut)
 
     with open("output.txt", 'w', encoding="utf8") as out:
-        for i in range(len(textLines)):
-            lineOut = textLines[i]
-            out.write(lineOut)
+        for line in textLines:
+            out.write(line)
 
 
 @mainFunction
 def removeIndexFromEosui(txtFilename):
     """Remove tags from either kr_client.str or kr_pregame.str for use with official release."""
-    reConstantTagNew = re.compile(r'^\[(.+?)\] = "(\{(C|P):(.+?)\})(.+?)"$')
-    reConstantTagOld = re.compile(r'^\[(.+?)\] = "(\{[^CP].+?\})(.+?)"$')
-    reConstantTagOlder = re.compile(r'^\[(.+?)\] = "([^CP\{\}].+?)"$')
-    reFontTag = re.compile(r'^\[Font:(.+?)')
-    reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
-
     textLines = []
 
     with open(txtFilename, 'r', encoding="utf8") as textIns:
@@ -500,7 +561,6 @@ def readCurrentLangFile(currentLanguageFile):
 def combineClientFiles(client_filename, pregame_filename):
     """Read in client and pregame files and save the combined information to
     output.txt as one file to avoid duplication of SI_ constants."""
-    reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
     textLines = []
     conIndex_set = set()
 
@@ -551,7 +611,6 @@ def createWeblateFile(input_filename, langValue):
     """Read output.txt from combineClientFiles and specify the langValue
     such as turkish to use as the name of the translated string and save
     the resulting text as a yaml file for use with weblate."""
-    reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
     output_filename = os.path.splitext(input_filename)[0] + ".yaml"
 
     try:
@@ -589,7 +648,6 @@ def importClientTranslations(inputYaml, inputClientFile, langValue):
     """Read inputYaml from createWeblateFile and either the client.str
     or pregame.str file and update the translated text langValue."""
 
-    reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
     translations = {}
 
     # Read the translations from the YAML file
@@ -637,10 +695,6 @@ def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
     Merges either kb_client.str or kb_pregame.str with updated translations for current live server files.
     Untested, previously attempted to merge en_client.str and kb_client.str
     """
-
-    reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
-    reFontTag = re.compile(r'^\[Font:(.+?)')
-    reEmptyLine = re.compile(r'^\[(.+?)\] = \"\"')
 
     textTranslatedDict = {}
     textUntranslatedDict = {}
@@ -707,8 +761,6 @@ textTranslatedDict = {}
 
 
 def readTaggedLangFile(taggedFile, targetDict):
-    reLangConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
-
     with open(taggedFile, 'r', encoding="utf8") as textIns:
         for line in textIns:
             maConstantText = reLangConstantTag.match(line)
@@ -754,7 +806,6 @@ def calculate_similarity_and_threshold(text1, text2):
 @mainFunction
 def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
     """Untested: Merges either kb.lang or kr.lang with updated translations for current live server files."""
-    reLangConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
 
     def isTranslatedText(line):
         for char in range(0, len(line)):
@@ -885,9 +936,6 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
 @mainFunction
 def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
     """Reads live and pts en_client.str or en_pregame.str and if text is the same uses existing translation."""
-    reConstantTag = re.compile(r'^\[(.+?)\] = "(.*?)"$')
-    reFontTag = re.compile(r'^\[Font:(.+?)')
-    reEmptyLine = re.compile(r'^\[(.+?)\] = ("")$')
 
     def isTranslatedText(line):
         for char in range(0, len(line)):
