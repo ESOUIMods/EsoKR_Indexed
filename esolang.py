@@ -92,10 +92,20 @@ reClientTaged = re.compile(r'^\[(.+?)\] = "(\{(?:[CP]:)?([^{}]+)?\})(.+?)"$')
 # Matches a font tag in the format [Font:font_name]
 reFontTag = re.compile(r'^\[Font:(.+?)')
 
+# Global Dictionaries ---------------------------------------------------------
+textUntranslatedLiveDict = {}
+textUntranslatedPTSDict = {}
+textTranslatedDict = {}
+textUntranslatedDict = {}
+
 
 # Helper for escaped chars ----------------------------------------------------
 def escape_special_characters(text):
     return text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace(r'\\\"', r'\"')
+
+
+def isTranslatedText(line):
+    return any(ord(char) > 127 for char in line)
 
 
 # Conversion ------------------------------------------------------------------
@@ -144,15 +154,14 @@ def addIndexToLangFile(txtFilename, idFilename):
     textLines = []
     idLines = []
 
-    with open(txtFilename, 'r', encoding="utf8") as textIns:
-        for line in textIns:
-            newstr = line.rstrip()
-            textLines.append(newstr)
+    def readLinesFromFile(filename, targetList):
+        with open(filename, 'r', encoding="utf8") as textIns:
+            for line in textIns:
+                newstr = line.strip()
+                targetList.append(newstr)
 
-    with open(idFilename, 'r', encoding="utf8") as idIns:
-        for line in idIns:
-            newstr = line.strip()
-            idLines.append(newstr)
+    readLinesFromFile(txtFilename, textLines)
+    readLinesFromFile(txtFilename, idLines)
 
     with open('output.txt', 'w', encoding="utf8") as output:
         for i in range(len(textLines)):
@@ -213,7 +222,34 @@ def removeIndexToLangFile(txtFilename):
 
 @mainFunction
 def koreanToEso(txtFilename):
-    """Shift text Korean UTF8 to Chinese UTF8."""
+    """
+    Convert Korean UTF-8 encoded text to Chinese UTF-8 encoded text with byte offset.
+
+    This function reads a source text file containing Korean UTF-8 encoded text and applies a byte offset to convert it to
+    Chinese UTF-8 encoded text. The byte offset is used to shift the Korean text to a range that is normally occupied by
+    Chinese characters. This technique is used in Elder Scrolls Online (ESO) to display Korean text using a nonstandard font
+    that resides in the Chinese character range. The converted text is saved in a new file named 'output.txt'.
+
+    Args:
+        txtFilename (str): The filename of the source text file containing Korean UTF-8 encoded text.
+
+    Notes:
+        - The function reads the source file in binary mode and applies a byte-level analysis to determine the proper conversion.
+        - A byte offset is added to the Unicode code points of the Korean characters to position them within the Chinese character range.
+        - The resulting Chinese UTF-8 encoded text is written to the 'output.txt' file in UTF-8 encoding.
+
+    Example:
+        Given a source text file 'korean.txt' with Korean UTF-8 encoded text:
+        ```
+        나는 가고 싶다
+        ```
+
+        Calling `koreanToEso('korean.txt')` will produce an output file 'output.txt':
+        ```
+        犘璔 渀滠 蓶瓤
+        ```
+
+    """
     not_eof = True
     with open(txtFilename, 'rb') as textIns:
         with open("output.txt", 'w', encoding="utf8") as out:
@@ -260,7 +296,35 @@ def koreanToEso(txtFilename):
 
 @mainFunction
 def esoToKorean(txtFilename):
-    """Shift text from Chinese UTF8 to Korean UTF8."""
+    """
+    Convert Chinese UTF-8 encoded text to traditional Korean UTF-8 encoded text with byte offset reversal.
+
+    This function reads a source text file containing Chinese UTF-8 encoded text and applies an opposite byte offset to
+    convert it to traditional Korean UTF-8 encoded text. The byte offset reversal is used to shift the Chinese text back
+    to its original traditional Korean character range. This technique is used when working with Chinese text that has
+    been encoded using a byte offset to simulate Korean characters. The converted text is saved in a new file named 'output.txt'.
+
+    Args:
+        txtFilename (str): The filename of the source text file containing Chinese UTF-8 encoded text (e.g., 'kr.lang.txt').
+
+    Notes:
+        - The function reads the source file in binary mode and applies a byte-level analysis to determine the proper conversion.
+        - An opposite byte offset is subtracted from the Unicode code points of the Chinese characters to convert them back to
+          their original traditional Korean characters.
+        - The resulting traditional Korean UTF-8 encoded text is written to the 'output.txt' file in UTF-8 encoding.
+
+    Example:
+        Given a source text file 'kr.lang.txt' with Chinese UTF-8 encoded text:
+        ```
+        犘璔 渀滠 蓶瓤
+        ```
+
+        Calling `esoToKorean('kr.lang.txt')` will produce an output file 'output.txt':
+        ```
+        나는 가고 싶다
+        ```
+
+    """
     not_eof = True
     with open(txtFilename, 'rb') as textIns:
         with open("output.txt", 'w', encoding="utf8") as out:
@@ -390,38 +454,49 @@ def addIndexToEosui(txtFilename):
 
 @mainFunction
 def removeIndexFromEosui(txtFilename):
-    """Remove tags from either kr_client.str or kr_pregame.str for use with official release."""
+    """
+    Remove tags and identifiers from either kr_client.str or kr_pregame.str for use with official release.
+
+    This function reads a target text file containing entries with tags and identifiers and removes these tags and identifiers,
+    resulting in a clean language text file. The output is saved in a new file named 'output.txt'.
+
+    Args:
+        txtFilename (str): The filename of the target text file containing entries with tags and identifiers
+                          (e.g., 'kr_client.str' or 'kr_pregame.str').
+
+    Notes:
+        - The function uses regular expressions to detect and remove tags, identifiers, and empty lines.
+        - Entries containing '[Font:' are skipped, as well as empty lines.
+        - The cleaned entries are written to the output file 'output.txt' in the same directory as the script.
+
+    Example:
+        Given a target text file 'kr_client.str':
+        ```
+        [SI_LOCATION_NAME] = "{C:10207}Gonfalon Bay"
+        ```
+
+        Calling `removeIndexFromEosui('kr_client.str')` will produce an output file 'output.txt':
+        ```
+        [SI_LOCATION_NAME] = "Gonfalon Bay"
+        ```
+
+    """
     textLines = []
 
     with open(txtFilename, 'r', encoding="utf8") as textIns:
         for line in textIns:
             line = line.rstrip()
             maFontTag = reFontTag.match(line)
-            maConstantTagNew = reConstantTagNew.match(line)
-            maConstantTagOld = reConstantTagOld.match(line)
-            maConstantTagOlder = reConstantTagOlder.match(line)
-            maEmptyLine = reEmptyLine.match(line)
-            conIndex = ""
-            conText = ""
+            maClientUntaged = reClientUntaged.match(line)
 
-            if maEmptyLine or maFontTag:
+            if maFontTag or maClientUntaged:
                 textLines.append(line + "\n")
                 continue
 
-            if maConstantTagOlder:
-                conIndex = maConstantTagOlder.group(1)
-                conText = maConstantTagOlder.group(2)
-                newString = conText.replace(conIndex + " ", "")
-                lineOut = '[{}] = "{}"\n'.format(conIndex, newString)
-                textLines.append(lineOut)
-            elif maConstantTagOld:
-                conIndex = maConstantTagOld.group(1)
-                conText = maConstantTagOld.group(3)
-                lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
-                textLines.append(lineOut)
-            elif maConstantTagNew:
-                conIndex = maConstantTagNew.group(1)
-                conText = maConstantTagNew.group(5)
+            maClientTaged = reClientTaged.match(line)
+            if maClientTaged:
+                conIndex = maClientTaged.group(1)
+                conText = maClientTaged.group(3)
                 lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
                 textLines.append(lineOut)
 
@@ -484,7 +559,16 @@ def readNullStringByChar(offset, start, file):
 
 
 def readNullString(offset, start, file):
-    """Reads the amount of bytes of chunkSize and looks for a null char then returns a string."""
+    """Reads a null-terminated string from the file, starting at the given offset within the chunk.
+
+    Args:
+        offset (int): The offset within the chunk to start reading the string.
+        start (int): The starting position within the file.
+        file (file): The file object to read from.
+
+    Returns:
+        bytes: The read null-terminated string.
+    """
     chunkSize = 1024
     nullChar = False
     textLine = b''
@@ -508,6 +592,14 @@ def readNullString(offset, start, file):
 
 
 def readLangFile(languageFileName):
+    """Read a language file and extract index and string information.
+
+    Args:
+        languageFileName (str): The name of the language file to read.
+
+    Returns:
+        dict, dict: Dictionaries containing index and string information.
+    """
     with open(languageFileName, 'rb') as lineIn:
         numSections = readUInt32(lineIn)
         numIndexes = readUInt32(lineIn)
@@ -547,6 +639,13 @@ def readLangFile(languageFileName):
 
 
 def writeLangFile(languageFileName, fileIndexes, fileStrings):
+    """Write index and string information back to a language file.
+
+    Args:
+        languageFileName (str): The name of the language file to write to.
+        fileIndexes (dict): Dictionary containing index information.
+        fileStrings (dict): Dictionary containing string information.
+    """
     numIndexes = fileIndexes['numIndexes']
     numSections = fileIndexes['numSections']
     numStrings = fileStrings['stringCount']
@@ -578,7 +677,15 @@ def writeLangFile(languageFileName, fileIndexes, fileStrings):
 
 @mainFunction
 def readCurrentLangFile(currentLanguageFile):
-    """Reads a language files such as en.lang and stores the indexes and strings in dictionaries for later processing."""
+    """Reads a language file, stores index and string data, and writes to an output file.
+
+    Args:
+        currentLanguageFile (str): The name of the current language file to read.
+
+    Note:
+        This function reads the provided language file, extracts index and string information,
+        updates string offsets if needed, and writes the data back to an output file named 'output.lang'.
+    """
 
     currentFileIndexes, currentFileStrings = readLangFile(currentLanguageFile)
     print(currentFileStrings['stringCount'])
@@ -587,15 +694,52 @@ def readCurrentLangFile(currentLanguageFile):
 
 @mainFunction
 def combineClientFiles(client_filename, pregame_filename):
-    """Read in client and pregame files and save the combined information to
-    output.txt as one file to avoid duplication of SI_ constants."""
+    """
+    Combine content from en_client.str and en_pregame.str files.
+
+    This function reads the content of en_client.str and en_pregame.str files, extracts
+    constant entries that match the pattern defined by reClientUntaged, and saves the combined
+    information into an 'output.txt' file. The goal is to avoid duplication of SI_ constants
+    by combining the entries from both files. If a constant exists in both files, only one
+    entry will be written to the output file to eliminate duplicated constants for translation.
+
+    Args:
+        client_filename (str): The filename of the en_client.str file.
+        pregame_filename (str): The filename of the en_pregame.str file.
+
+    Notes:
+        This function uses regular expressions to identify and extract constant entries
+        from the input files. The extracted entries are then formatted and stored in the
+        'output.txt' file.
+
+    Example:
+        Given en_client.str:
+        ```
+        [SI_MY_CONSTANT] = "My Constant Text"
+        [SI_CONSTANT] = "Some Constant Text"
+        ```
+
+        Given en_pregame.str:
+        ```
+        [SI_CONSTANT] = "Some Constant Text"
+        [SI_ADDITIONAL_CONSTANT] = "Additional Constant Text"
+        ```
+
+        Calling `combineClientFiles('en_client.str', 'en_pregame.str')` will produce an output file 'output.txt':
+        ```
+        [SI_MY_CONSTANT] = "My Constant Text"
+        [SI_CONSTANT] = "Some Constant Text"
+        [SI_ADDITIONAL_CONSTANT] = "Additional Constant Text"
+        ```
+
+    """
     textLines = []
     conIndex_set = set()
 
     def extract_constant(line):
         conIndex = None
         conText = None
-        match = reConstantTag.match(line)
+        match = reClientUntaged.match(line)
         if match:
             conIndex, conText = match.groups()
             if conText == "":
@@ -608,25 +752,20 @@ def combineClientFiles(client_filename, pregame_filename):
             textLines.append('[{}] = "{}"\n'.format(conIndex, escaped_conText))
             conIndex_set.add(conIndex)
 
-    # Process client.str file
-    with open(client_filename, 'r', encoding="utf8") as textInsClient:
-        for line in textInsClient:
-            line = line.rstrip()
-            if line.startswith("["):
-                conIndex, conText = extract_constant(line)
-                add_line(line, conIndex, conText)
-            else:
-                textLines.append(line + "\n")
+    def process_text_file(filename):
+        with open(filename, 'r', encoding="utf8") as textInsClient:
+            for line in textInsClient:
+                line = line.rstrip()
+                if line.startswith("["):
+                    conIndex, conText = extract_constant(line)
+                    add_line(line, conIndex, conText)
+                else:
+                    textLines.append(line + "\n")
 
+    # Process client.str file
+    process_text_file(client_filename)
     # Process pregame.str file
-    with open(pregame_filename, 'r', encoding="utf8") as textInsPregame:
-        for line in textInsPregame:
-            line = line.rstrip()
-            if line.startswith("["):
-                conIndex, conText = extract_constant(line)
-                add_line(line, conIndex, conText)
-            else:
-                textLines.append(line + "\n")
+    process_text_file(pregame_filename)
 
     # Write output to output.txt
     with open("output.txt", 'w', encoding="utf8") as out:
@@ -636,16 +775,51 @@ def combineClientFiles(client_filename, pregame_filename):
 
 @mainFunction
 def createWeblateFile(input_filename, langValue):
-    """Read output.txt from combineClientFiles and specify the langValue
-    such as turkish to use as the name of the translated string and save
-    the resulting text as a yaml file for use with weblate."""
+    """
+    Generate a YAML-like file for Weblate translation.
+
+    This function reads the 'output.txt' file generated by the combineClientFiles function
+    and creates a YAML-like file for use with Weblate translation. The langValue parameter is
+    used to specify the language value, such as 'turkish', to be used as the name of the translated
+    string in the resulting YAML file.
+
+    Args:
+        input_filename (str): The filename of the 'output.txt' file generated by combineClientFiles.
+        langValue (str): The language value to use as the name of the translated string.
+
+    Notes:
+        This function extracts constant entries using the reClientUntaged pattern from the input file,
+        creates a dictionary of translations, and generates a YAML-like file with the format suitable for Weblate.
+
+    Example:
+        Given 'output.txt':
+        ```
+        [SI_MY_CONSTANT] = "My Constant Text"
+        [SI_CONSTANT] = "Some Constant Text"
+        [SI_ADDITIONAL_CONSTANT] = "Additional Constant Text"
+        ```
+
+        Calling `createWeblateFile('output.txt', 'turkish')` will produce a 'output.yaml' file:
+        ```
+        SI_MY_CONSTANT:
+          english: "My Constant Text"
+          turkish: "My Constant Text"
+        SI_CONSTANT:
+          english: "Some Constant Text"
+          turkish: "Some Constant Text"
+        SI_ADDITIONAL_CONSTANT:
+          english: "Additional Constant Text"
+          turkish: "Additional Constant Text"
+        ```
+
+    """
     output_filename = os.path.splitext(input_filename)[0] + ".yaml"
 
     try:
         with open(input_filename, 'r', encoding="utf8") as textIns:
             translations = {}
             for line in textIns:
-                match = reConstantTag.match(line)
+                match = reClientUntaged.match(line)
                 if match:
                     conIndex, conText = match.groups()
                     translations[conIndex] = conText
@@ -673,9 +847,47 @@ def createWeblateFile(input_filename, langValue):
 
 @mainFunction
 def importClientTranslations(inputYaml, inputClientFile, langValue):
-    """Read inputYaml from createWeblateFile and either the client.str
-    or pregame.str file and update the translated text langValue."""
+    """
+    Import translated text from a YAML file into the client or pregame file.
 
+    This function reads the translated text from the specified inputYaml file,
+    which is generated by the createWeblateFile function. It then updates the specified
+    language's translation in either the inputClientFile (en_client.str) or inputPregameFile (en_pregame.str).
+
+    Args:
+        inputYaml (str): The filename of the YAML file generated by createWeblateFile.
+        inputClientFile (str): The filename of the client or pregame file to update.
+        langValue (str): The language value used as the key for the specified language in the YAML file.
+
+    Notes:
+        This function accesses the translated text from the YAML file, and for each constant entry in
+        the inputClientFile, updates the translation with the corresponding entry from the YAML file.
+        The updated translations are then saved to an '_updated.yaml' file.
+
+    Example:
+        Given 'translations.yaml':
+        ```
+        SI_MY_CONSTANT:
+          english: "My Constant Text"
+          turkish: "Benim Sabit Metnim"
+        SI_CONSTANT:
+          english: "Some Constant Text"
+          turkish: "Bazı Sabit Metin"
+        ```
+
+        Calling `importClientTranslations('translations.yaml', 'en_client.str', 'turkish')` will update the
+        'turkish' translation in 'en_client.str' and create an 'translations_updated.yaml' file:
+        ```
+        SI_MY_CONSTANT:
+          english: "My Constant Text"
+          turkish: "Benim Sabit Metnim"
+        SI_CONSTANT:
+          english: "Some Constant Text"
+          turkish: "Bazı Sabit Metin"
+        Updated translations saved to translations_updated.yaml.
+        ```
+
+    """
     translations = {}
 
     # Read the translations from the YAML file
@@ -694,7 +906,7 @@ def importClientTranslations(inputYaml, inputClientFile, langValue):
     # Update translations from the inputClientFile
     with open(inputClientFile, 'r', encoding="utf8") as textIns:
         for line in textIns:
-            match = reConstantTag.match(line)
+            match = reClientUntaged.match(line)
             if match:
                 conIndex, conText = match.groups()
                 if conIndex in translations and conText != translations[conIndex]['english']:
@@ -716,85 +928,68 @@ def importClientTranslations(inputYaml, inputClientFile, langValue):
     print("Updated translations saved to {}.".format(output_filename))
 
 
+def processEosuiTextFile(filename, text_dict):
+    """Read and process an ESOUI text file (en_client.str or en_pregame.str)
+    and populate the provided text_dict.
+
+    Args:
+        filename (str): The filename of the ESOUI text file (en_client.str or en_pregame.str) to process.
+        text_dict (dict): A dictionary to store the extracted text entries.
+
+    Returns:
+        None
+    """
+    with open(filename, 'r', encoding="utf8") as textIns:
+        for line in textIns:
+            line = line.rstrip()
+            if reClientUntaged.match(line):
+                conIndex, conText = reClientUntaged.match(line).groups()
+                newString = conText.replace(conIndex + " ", "")
+                text_dict[conIndex] = newString
+
+
 @mainFunction
 def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
-    """replaced with: diffEsouiText
+    """Merge translated and untranslated ESOUI text (en_client.str or en_pregame.str)
+    for current live server files.
 
-    Merges either kb_client.str or kb_pregame.str with updated translations for current live server files.
-    Untested, previously attempted to merge en_client.str and kb_client.str
+    Args:
+        translatedFilename (str): The filename of the translated ESOUI text file (en_client.str or en_pregame.str).
+        unTranslatedFilename (str): The filename of the untranslated ESOUI text file (en_client.str or en_pregame.str).
+
+    This function merges the translated ESOUI text from the specified translatedFilename with the
+    untranslated ESOUI text from the unTranslatedFilename. It creates an 'output.txt' file containing
+    merged entries, prioritizing translated text over untranslated text if available.
+
+    Note:
+        This function was replaced by the `diffEsouiText` function and uses reClientUntaged to identify
+        constant entries and empty lines. It generates merged entries based on the translated and
+        untranslated dictionaries.
+
     """
 
-    textTranslatedDict = {}
-    textUntranslatedDict = {}
-    # Get ID numbers ------------------------------------------------------
-    textIns = open(translatedFilename, 'r', encoding="utf8")
-    for line in textIns:
-        line = line.rstrip()
-        maFontTag = reFontTag.match(line)
-        maConstantIndex = reConstantTag.match(line)
-        maConstantText = reConstantTag.match(line)
-        maEmptyLine = reEmptyLine.match(line)
-        conIndex = ""
-        conText = ""
-        if maEmptyLine:
-            continue
-        if maFontTag:
-            continue
-        if maConstantIndex or maConstantText and not maFontTag:
-            if maConstantIndex:
-                conIndex = maConstantIndex.group(1)
-            if maConstantText:
-                conText = maConstantText.group(2)
-                newString = conText.replace(conIndex + " ", "")
-            textTranslatedDict[conIndex] = newString
-    textIns.close()
-    textIns = open(unTranslatedFilename, 'r', encoding="utf8")
-    for line in textIns:
-        line = line.rstrip()
-        maFontTag = reFontTag.match(line)
-        maConstantIndex = reConstantTag.match(line)
-        maConstantText = reConstantTag.match(line)
-        maEmptyLine = reEmptyLine.match(line)
-        conIndex = ""
-        conText = ""
-        if maEmptyLine:
-            continue
-        if maFontTag:
-            continue
-        if maConstantIndex or maConstantText and not maFontTag:
-            if maConstantIndex:
-                conIndex = maConstantIndex.group(1)
-            if maConstantText:
-                conText = maConstantText.group(2)
-                newString = conText.replace(conIndex + " ", "")
-            textUntranslatedDict[conIndex] = newString
-    textIns.close()
-    # --Write Output ------------------------------------------------------
-    out = open("output.txt", 'w', encoding="utf8")
-    for key in textUntranslatedDict:
-        conIndex = key
-        conText = None
-        if textTranslatedDict.get(conIndex) is not None:
-            conText = textTranslatedDict[key]
-        if not conText:
-            conText = textUntranslatedDict[key]
-        lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
-        out.write(lineOut)
-    out.close()
+    # Read and process translated ESOUI text
+    processEosuiTextFile(translatedFilename, textTranslatedDict)
 
+    # Read and process untranslated ESOUI text
+    processEosuiTextFile(unTranslatedFilename, textUntranslatedDict)
 
-textUntranslatedLiveDict = {}
-textUntranslatedPTSDict = {}
-textTranslatedDict = {}
+    # Write merged output
+    with open("output.txt", 'w', encoding="utf8") as out:
+        for key in textUntranslatedDict:
+            conIndex = key
+            conText = textTranslatedDict.get(conIndex, textUntranslatedDict[key])
+            lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
+            out.write(lineOut)
 
 
 def readTaggedLangFile(taggedFile, targetDict):
     with open(taggedFile, 'r', encoding="utf8") as textIns:
         for line in textIns:
-            maConstantText = reLangConstantTag.match(line)
-            if maConstantText:
-                conIndex = maConstantText.group(1)
-                conText = maConstantText.group(2)
+            maLangIndex = reLangIndex.match(line)
+            if maLangIndex:
+                conIndex = maLangIndex.group(1)
+                conText = maLangIndex.group(2)
                 targetDict[conIndex] = conText
 
 
@@ -833,49 +1028,65 @@ def calculate_similarity_and_threshold(text1, text2):
 
 @mainFunction
 def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
-    """Untested: Merges either kb.lang or kr.lang with updated translations for current live server files."""
+    """Untested: Merge translated and untranslated language text for current live server files.
 
-    def isTranslatedText(line):
-        for char in range(0, len(line)):
-            returnedBytes = bytes(line[char], 'utf-8')
-            length = len(returnedBytes)
-            if length > 1: return True
-        return None
+    Args:
+        translatedFilename (str): The filename of the translated language text file.
+        unTranslatedFilename (str): The filename of the untranslated language text file.
 
-    textTranslatedDict = {}
-    textUntranslatedDict = {}
-    # Get ID numbers ------------------------------------------------------
-    textIns = open(translatedFilename, 'r', encoding="utf8")
-    for line in textIns:
-        maConstantText = reLangConstantTag.match(line)
-        conIndex = maConstantText.group(1)
-        conText = maConstantText.group(2)
-        textTranslatedDict[conIndex] = conText
-    textIns.close()
-    textIns = open(unTranslatedFilename, 'r', encoding="utf8")
-    for line in textIns:
-        maConstantText = reLangConstantTag.match(line)
-        conIndex = maConstantText.group(1)
-        conText = maConstantText.group(2)
-        textUntranslatedDict[conIndex] = conText
-    textIns.close()
-    # --Write Output ------------------------------------------------------
-    out = open("output.txt", 'w', encoding="utf8")
-    for key in textUntranslatedDict:
-        conText = None
-        if textTranslatedDict.get(key) is None:
-            conText = textUntranslatedDict[key]
-            lineOut = '{{{{{}:}}}}{}\n'.format(key, conText.rstrip())
+    This function merges the translated language text from the specified translatedFilename with the
+    untranslated language text from the unTranslatedFilename. It creates an 'output.txt' file containing
+    merged entries, prioritizing translated text over untranslated text if available.
+
+    Args:
+        translatedFilename (str): The filename of the translated language text file.
+        unTranslatedFilename (str): The filename of the untranslated language text file.
+
+    This function reads the translated and untranslated language text files, extracts constant indexes
+    and text using reLangIndex, and then generates merged entries based on the presence of translated
+    text.
+
+    Note:
+        This function assumes that the input files follow the format of indexed language text entries
+        like "{{{3427285-5-36:}}}TEXT".
+
+    Note:
+        This function is untested and not currently used.
+
+    """
+
+    # Get translated text entries
+    with open(translatedFilename, 'r', encoding="utf8") as textIns:
+        for line in textIns:
+            maLangIndex = reLangIndex.match(line)
+            if maLangIndex:
+                conIndex, conText = maLangIndex.groups()
+                textTranslatedDict[conIndex] = conText
+
+    # Get untranslated text entries
+    with open(unTranslatedFilename, 'r', encoding="utf8") as textIns:
+        for line in textIns:
+            maLangIndex = reLangIndex.match(line)
+            if maLangIndex:
+                conIndex, conText = maLangIndex.groups()
+                textUntranslatedDict[conIndex] = conText
+
+    # Write merged output
+    with open("output.txt", 'w', encoding="utf8") as out:
+        for key in textUntranslatedDict:
+            conText = None
+            if textTranslatedDict.get(key) is None:
+                conText = textUntranslatedDict[key]
+                lineOut = '{{{{{}:}}}}{}\n'.format(key, conText.rstrip())
+                out.write(lineOut)
+                continue
+            if textTranslatedDict.get(key) is not None:
+                if isTranslatedText(textTranslatedDict.get(key)):
+                    conText = textTranslatedDict[key]
+            if not conText:
+                conText = textUntranslatedDict[key]
+            lineOut = '{{{{{}:}}}}{}\n'.format(key, conText)
             out.write(lineOut)
-            continue
-        if textTranslatedDict.get(key) is not None:
-            if isTranslatedText(textTranslatedDict.get(key)):
-                conText = textTranslatedDict[key]
-        if not conText:
-            conText = textUntranslatedDict[key]
-        lineOut = '{{{{{}:}}}}{}\n'.format(key, conText)
-        out.write(lineOut)
-    out.close()
 
 
 @mainFunction
@@ -902,9 +1113,6 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
     - Compares the PTS and live texts to determine if translation changes are needed.
     - Writes the output to "output.txt" with potential new translations and to "verify_output.txt" for verification purposes.
     """
-
-    def isTranslatedText(line):
-        return any(ord(char) > 127 for char in line)
 
     # Get Previous Translation ------------------------------------------------------
     readTaggedLangFile(translatedFilename, textTranslatedDict)
@@ -963,117 +1171,59 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
 
 @mainFunction
 def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
-    """Reads live and pts en_client.str or en_pregame.str and if text is the same uses existing translation."""
+    """Diff and Merge ESOUI Text Files with Existing Translations.
 
-    def isTranslatedText(line):
-        for char in range(0, len(line)):
-            returnedBytes = bytes(line[char], 'utf-8')
-            length = len(returnedBytes)
-            if length > 1: return True
-        return None
+    This function reads three input ESOUI text files: translatedFilename, liveFilename, and ptsFilename,
+    and performs a diff and merge operation. The purpose is to update the translated ESOUI text by
+    comparing the live and PTS (Public Test Server) text files and using the existing translations when
+    the text is the same.
 
-    textTranslatedDict = {}
-    liveUntranslatedDict = {}
-    ptsUntranslatedDict = {}
+    Args:
+        translatedFilename (str): The filename of the translated ESOUI text file (en_client.str or en_pregame.str).
+        liveFilename (str): The filename of the live ESOUI text file (kb_client.str or kb_pregame.str).
+        ptsFilename (str): The filename of the PTS (Public Test Server) ESOUI text file (kb_client.str or kb_pregame.str).
+
+    Note:
+        This function uses reLangIndex to identify language constant entries and their associated text.
+
+    The function compares the live and PTS text for each constant entry and determines whether to use
+    the existing translation or the live/PTS text. The result is saved in an 'output.txt' file containing
+    merged entries with translated text if available.
+
+    """
     # Read translated text ----------------------------------------------------
-    textIns = open(translatedFilename, 'r', encoding="utf8")
-    for line in textIns:
-        line = line.rstrip()
-        maFontTag = reFontTag.match(line)
-        maConstantText = reConstantTag.match(line)
-        maEmptyLine = reEmptyLine.match(line)
-        if maEmptyLine:
-            conIndex = maEmptyLine.group(1)
-            conText = maEmptyLine.group(2)
-            textTranslatedDict[conIndex] = conText
-            continue
-        if maFontTag:
-            continue
-        if maConstantText and not maEmptyLine and not maFontTag:
-            conIndex = maConstantText.group(1)
-            conText = maConstantText.group(2)
-            # newString = conText.replace(conIndex + " ", "")
-            textTranslatedDict[conIndex] = conText
-    textIns.close()
+    readTaggedLangFile(translatedFilename, textTranslatedDict)
     # Read live text ----------------------------------------------------
-    textIns = open(liveFilename, 'r', encoding="utf8")
-    for line in textIns:
-        line = line.rstrip()
-        maFontTag = reFontTag.match(line)
-        maConstantText = reConstantTag.match(line)
-        maEmptyLine = reEmptyLine.match(line)
-        if maEmptyLine:
-            conIndex = maEmptyLine.group(1)
-            conText = maEmptyLine.group(2)
-            liveUntranslatedDict[conIndex] = conText
-            continue
-        if maFontTag:
-            continue
-        if maConstantText and not maEmptyLine and not maFontTag:
-            conIndex = maConstantText.group(1)
-            conText = maConstantText.group(2)
-            # newString = conText.replace(conIndex + " ", "")
-            liveUntranslatedDict[conIndex] = conText
-    textIns.close()
+    readTaggedLangFile(liveFilename, textUntranslatedLiveDict)
     # Read pts text ----------------------------------------------------
-    textIns = open(ptsFilename, 'r', encoding="utf8")
-    for line in textIns:
-        line = line.rstrip()
-        maFontTag = reFontTag.match(line)
-        maConstantText = reConstantTag.match(line)
-        maEmptyLine = reEmptyLine.match(line)
-        if maEmptyLine:
-            conIndex = maEmptyLine.group(1)
-            conText = maEmptyLine.group(2)
-            ptsUntranslatedDict[conIndex] = conText
-            continue
-        if maFontTag:
-            continue
-        if maConstantText and not maEmptyLine and not maFontTag:
-            conIndex = maConstantText.group(1)
-            conText = maConstantText.group(2)
-            # newString = conText.replace(conIndex + " ", "")
-            ptsUntranslatedDict[conIndex] = conText
-    textIns.close()
+    readTaggedLangFile(ptsFilename, textUntranslatedPTSDict)
     # --Write Output ------------------------------------------------------
-    out = open("output.txt", 'w', encoding="utf8")
-    for key in ptsUntranslatedDict:
-        translatedText = textTranslatedDict.get(key)
-        liveText = liveUntranslatedDict.get(key)
-        ptsText = ptsUntranslatedDict.get(key)
-        if len(ptsText) == 2:
-            firstChar = ord(ptsText[0])
-            lastChar = ord(ptsText[1])
-            if firstChar == 34 and lastChar == 34:
-                lineOut = '[{}] = ""\n'.format(key)
+    with open("output.txt", 'w', encoding="utf8") as out:
+        for key in textUntranslatedPTSDict:
+            translatedText = textTranslatedDict.get(key)
+            liveText = textUntranslatedLiveDict.get(key)
+            ptsText = textUntranslatedPTSDict.get(key)
+            maClientUntaged = reClientUntaged.match(ptsText)
+            if maClientUntaged:
+                conIndex, conText = maClientUntaged.groups()
+                lineOut = '[{}] = ""\n'.format(conIndex)
                 out.write(lineOut)
                 continue
-        hasExtendedChars = False
-        hasTranslation = False
-        outputText = ptsText
-
-        if translatedText is not None and (translatedText != ""):
             hasExtendedChars = isTranslatedText(translatedText)
-            if (translatedText != ptsText):
-                hasTranslation = True
-        if not hasTranslation and hasExtendedChars:
-            hasTranslation = True
-        if translatedText is None:
             hasTranslation = False
+            outputText = ptsText
 
-        if hasTranslation:
-            outputText = translatedText
-        lineOut = '[{}] = "{}"\n'.format(key, outputText)
-        out.write(lineOut)
-    out.close()
+            if translatedText is not None and (translatedText != ""):
+                if (translatedText != ptsText):
+                    hasTranslation = True
+            if not hasTranslation and hasExtendedChars:
+                hasTranslation = True
+            if translatedText is None:
+                hasTranslation = False
 
-
-def write_output_file(filename, targetList, targetCount, targetString):
-    with open(filename, 'w', encoding="utf8") as out:
-        lineOut = '{}: indexes {}\n'.format(targetCount, targetString)
-        out.write(lineOut)
-        for i in range(len(targetList)):
-            lineOut = targetList[i]
+            if hasTranslation:
+                outputText = translatedText
+            lineOut = '[{}] = "{}"\n'.format(key, outputText)
             out.write(lineOut)
 
 
@@ -1109,6 +1259,15 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     - 'deletedIndexes.txt': Indexes present in the live version but absent in the PTS version.
     - 'addedIndexes.txt': Indexes that are newly added in the PTS version.
     """
+
+    def write_output_file(filename, targetList, targetCount, targetString):
+        with open(filename, 'w', encoding="utf8") as out:
+            lineOut = '{}: indexes {}\n'.format(targetCount, targetString)
+            out.write(lineOut)
+            for i in range(len(targetList)):
+                lineOut = targetList[i]
+                out.write(lineOut)
+
     # Get Previous/Live English Text ------------------------------------------------------
     readTaggedLangFile(LiveFilename, textUntranslatedLiveDict)
     # Get Current/PTS English Text ------------------------------------------------------
