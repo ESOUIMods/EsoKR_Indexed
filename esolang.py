@@ -84,14 +84,15 @@ reLangIndex = re.compile(r'^\{\{([^:]+):}}(.+?)$')
 reLangIndexOld = re.compile(r'^(\d{1,10}-\d{1,7}-\d{1,7}) (.+)$')
 
 # Matches untagged client strings or empty lines in the format [key] = "value" or [key] = ""
-reClientUntaged = re.compile(r'^\[(.+?)\] = "(.*?)"$|^(\[.+?\] = "")$')
+reClientUntaged = re.compile(r'^\[(.+?)\] = "(\{(?:[CP]:)?\d+\})?(.*?)"$|^(\[.+?\] = "")$')
 
 # Matches tagged client strings in the format [key] = "{tag:value}text"
-reClientTaged = re.compile(r'^\[(.+?)\] = "(\{(?:[CP]:)?([^{}]+)?\})(.+?)"$')
+reClientTaged = re.compile(r'^\[(.+?)\] = "(\{(?:[CP]:)?\d+\})(.*?)"$')
 
 # Matches a font tag in the format [Font:font_name]
 reFontTag = re.compile(r'^\[Font:(.+?)')
 
+reFontTag = re.compile(r'^\[Font:(.+?)')
 reClientUntaged = re.compile(r'^\[(.+?)\] = "(\{(?:[CP]:)?\d+\})?(.*?)"$|^(\[.+?\] = "")$')
 reClientTaged = re.compile(r'^\[(.+?)\] = "(\{(?:[CP]:)?\d+\})(.*?)"$')
 
@@ -520,7 +521,7 @@ def removeIndexFromEosui(txtFilename):
             maClientTaged = reClientTaged.match(line)
             if maClientTaged:
                 conIndex = maClientTaged.group(1)
-                conText = maClientTaged.group(4)  # Extract the actual text without the tag
+                conText = maClientTaged.group(3) if maClientTaged.group(3) is not None else maClientTaged.group(4)
                 lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
                 textLines.append(lineOut)
 
@@ -1370,6 +1371,30 @@ def test_section_functions():
     section_key_found = get_section_key_by_id(section_id_to_find)
 
     print("The sction key found was '{}': using {}".format(section_key_found, section_id_to_find))
+
+@mainFunction
+def test_remove_tags():
+    test_strings = [
+        '[SI_ABANDON_QUEST_CONFIRM] = "{C:7}Abandon"',
+        '[SI_LOCATION_NAME] = "{P:10207}Gonfalon Bay"',
+        '[SI_ADDONLOADSTATE1] = ""'
+    ]
+
+    print("Using reClientUntaged:")
+    for string in test_strings:
+        match = reClientUntaged.match(string)
+        if match:
+            conIndex = match.group(1)
+            conText = match.group(3) if match.group(3) is not None else match.group(4)  # Handle empty string
+            print('[{}] = "{}"'.format(conIndex, conText))
+
+    print("\nUsing reClientTaged:")
+    for string in test_strings:
+        match = reClientTaged.match(string)
+        if match:
+            conIndex = match.group(1)
+            conText = match.group(3)  # Extract the actual text without the tag
+            print('[{}] = "{}"'.format(conIndex, conText))
 
 if __name__ == "__main__":
     main()
