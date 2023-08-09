@@ -307,7 +307,35 @@ def esoToKorean(txtFilename):
 
 @mainFunction
 def addIndexToEosui(txtFilename):
-    """Add tags to either kr_client.str or kr_pregame.str for use with translation files."""
+    """
+    Add numeric tags to language entries in kr_client.str or kr_pregame.str for use with translation files.
+
+    This function reads a target text file containing language entries in the format of [key] = "value" pairs,
+    such as 'kr_client.str' or 'kr_pregame.str'. It then adds numeric tags to the entries and generates new entries
+    with the format [key] = "{C:numeric_tag}value" or [key] = "{P:numeric_tag}value", based on whether the entries
+    are intended for the client or pregame context.
+
+    Args:
+        txtFilename (str): The filename of the target text file containing language entries (e.g., 'kr_client.str' or 'kr_pregame.str').
+
+    Notes:
+        - The function uses regular expressions to detect and modify the entries.
+        - Entries listed in the 'no_prefix_indexes' list will retain their original format without numeric tags.
+
+    Example:
+        Given a target text file 'kr_client.str':
+        ```
+        [SI_PLAYER_NAME] = "Player Name"
+        [SI_PLAYER_LEVEL] = "Player Level"
+        ```
+
+        Calling `addIndexToEosui('kr_client.str')` will produce an output file 'output.txt':
+        ```
+        [SI_PLAYER_NAME] = "{C:1}Player Name"
+        [SI_PLAYER_LEVEL] = "{C:2}Player Level"
+        ```
+
+    """
 
     no_prefix_indexes = [
         "SI_PLAYER_NAME",
