@@ -100,51 +100,24 @@ textUntranslatedDict = {}
 
 
 # Helper for escaped chars ----------------------------------------------------
+def get_section_id(section_key):
+    return section.section_info.get(section_key, {}).get('sectionId', None)
+
+def get_section_name(section_key):
+    return section.section_info.get(section_key, {}).get('sectionName', None)
+
 def escape_special_characters(text):
     return text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace(r'\\\"', r'\"')
 
+def get_section_key_by_id(section_id):
+    for key, value in section.section_info.items():
+        if value['sectionId'] == section_id:
+            return key
+    return None
 
 def isTranslatedText(line):
     return any(ord(char) > 127 for char in line)
 
-def readLanguageFileLines(filename, targetList):
-    """
-    Read lines from a text or numerical identifier file and append them to a target list after stripping whitespace.
-
-    Args:
-        filename (str): The name of the file to read (e.g., 'en.lang.txt' or 'en.lang.id.txt').
-        targetList (list): The list to which the read lines will be appended.
-
-    Returns:
-        tuple: A tuple containing the populated target list and the number of items in the list.
-
-    This function reads each line from the specified file, whether it contains text or numerical identifiers,
-    and strips leading and trailing whitespace from each line before appending it to the provided target list.
-    The resulting list will contain the lines from the file without any leading or trailing whitespace.
-
-    Example:
-        Suppose the file 'en.lang.txt' contains the following lines:
-        ```
-        hello world
-          foo bar
-        ```
-        If you call `readLanguageFileLines('en.lang.txt', my_list)`, where `my_list` is an empty list,
-        the resulting `my_list` will be `['hello world', 'foo bar']`.
-
-        Similarly, if the file 'en.lang.id.txt' contains the following lines:
-        ```
-        18173141-0-2944
-        18173141-1-2944
-        ```
-        If you call `readLanguageFileLines('en.lang.id.txt', my_list)`, where `my_list` is an empty list,
-        the resulting `my_list` will be `['18173141-0-2944', '18173141-1-2944']`.
-
-    """
-    with open(filename, 'r', encoding="utf8") as textIns:
-        for line in textIns:
-            newstr = line.strip()
-            targetList.append(newstr)
-    return targetList, len(targetList)
 
 
 # Conversion ------------------------------------------------------------------
@@ -190,6 +163,13 @@ def addIndexToLangFile(txtFilename, idFilename):
         ```
 
     """
+    def readLanguageFileLines(filename, targetList):
+        with open(filename, 'r', encoding="utf8") as textIns:
+            for line in textIns:
+                newstr = line.strip()
+                targetList.append(newstr)
+        return targetList, len(targetList)
+
     textLines, textLineCount = readLanguageFileLines(txtFilename, [])
     idLines, idLineCount = readLanguageFileLines(idFilename, [])
 
@@ -1365,6 +1345,19 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     # Write added indexes
     write_output_file("addedIndexes.txt", addedText, addedIndexCount, 'added')
 
+@mainFunction
+def test_section_functions():
+    section_key = 'section_unknown_1'
+    section_id = get_section_id(section_key)
+    section_name = get_section_name(section_key)
+
+    print("Section ID for '{}': {}".format(section_key, section_id))
+    print("Section Name for '{}': {}".format(section_key, section_name))
+
+    section_id_to_find = 242841733
+    section_key_found = get_section_key_by_id(section_id_to_find)
+
+    print("The sction key found was '{}': using {}".format(section_key_found, section_id_to_find))
 
 if __name__ == "__main__":
     main()
