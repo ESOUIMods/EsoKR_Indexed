@@ -107,6 +107,45 @@ def escape_special_characters(text):
 def isTranslatedText(line):
     return any(ord(char) > 127 for char in line)
 
+def readLanguageFileLines(filename, targetList):
+    """
+    Read lines from a text or numerical identifier file and append them to a target list after stripping whitespace.
+
+    Args:
+        filename (str): The name of the file to read (e.g., 'en.lang.txt' or 'en.lang.id.txt').
+        targetList (list): The list to which the read lines will be appended.
+
+    Returns:
+        tuple: A tuple containing the populated target list and the number of items in the list.
+
+    This function reads each line from the specified file, whether it contains text or numerical identifiers,
+    and strips leading and trailing whitespace from each line before appending it to the provided target list.
+    The resulting list will contain the lines from the file without any leading or trailing whitespace.
+
+    Example:
+        Suppose the file 'en.lang.txt' contains the following lines:
+        ```
+        hello world
+          foo bar
+        ```
+        If you call `readLanguageFileLines('en.lang.txt', my_list)`, where `my_list` is an empty list,
+        the resulting `my_list` will be `['hello world', 'foo bar']`.
+
+        Similarly, if the file 'en.lang.id.txt' contains the following lines:
+        ```
+        18173141-0-2944
+        18173141-1-2944
+        ```
+        If you call `readLanguageFileLines('en.lang.id.txt', my_list)`, where `my_list` is an empty list,
+        the resulting `my_list` will be `['18173141-0-2944', '18173141-1-2944']`.
+
+    """
+    with open(filename, 'r', encoding="utf8") as textIns:
+        for line in textIns:
+            newstr = line.strip()
+            targetList.append(newstr)
+    return targetList, len(targetList)
+
 
 # Conversion ------------------------------------------------------------------
 # (txtFilename, idFilename)
@@ -151,17 +190,12 @@ def addIndexToLangFile(txtFilename, idFilename):
         ```
 
     """
-    textLines = []
-    idLines = []
+    textLines, textLineCount = readLanguageFileLines(txtFilename, [])
+    idLines, idLineCount = readLanguageFileLines(idFilename, [])
 
-    def readLinesFromFile(filename, targetList):
-        with open(filename, 'r', encoding="utf8") as textIns:
-            for line in textIns:
-                newstr = line.strip()
-                targetList.append(newstr)
-
-    readLinesFromFile(txtFilename, textLines)
-    readLinesFromFile(txtFilename, idLines)
+    if textLineCount != idLineCount:
+        print("Error: Number of lines in text and identifier files do not match. Aborting.")
+        return
 
     with open('output.txt', 'w', encoding="utf8") as output:
         for i in range(len(textLines)):
