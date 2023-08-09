@@ -76,6 +76,17 @@ def main():
 
 
 # Regular Expressions for Text Processing -------------------------------------
+"""
+Here's a breakdown of how the reClientUntaged expression works:
+
+^: Matches the start of the line.
+\[(.+?)\]: Matches the content inside square brackets and captures it as a group (conIndex).
+= ": Matches the equals sign and opening double quote after the square brackets.
+(?!.*[{}]): Negative lookahead assertion to ensure that there are no curly braces anywhere in the line.
+((?:[CP]:)?\d+)?: Captures an optional group for tags like [C:7] or [P:10207].
+(.*?): Captures the main text content within double quotes (conText).
+"$|^(\[.+?\] = "")$": Matches the closing double quote at the end of the line or an empty line.
+"""
 
 # Matches a language index in the format {{identifier:}}text
 reLangIndex = re.compile(r'^\{\{([^:]+):}}(.+?)$')
@@ -84,7 +95,7 @@ reLangIndex = re.compile(r'^\{\{([^:]+):}}(.+?)$')
 reLangIndexOld = re.compile(r'^(\d{1,10}-\d{1,7}-\d{1,7}) (.+)$')
 
 # Matches untagged client strings or empty lines in the format [key] = "value" or [key] = ""
-reClientUntaged = re.compile(r'^\[(.+?)\] = "(\{(?:[CP]:)?\d+\})?(.*?)"$|^(\[.+?\] = "")$')
+reClientUntaged = re.compile(r'^\[(.+?)\] = "(?!.*[{}])((?:[CP]:)?\d+)?(.*?)"$|^(\[.+?\] = "")$')
 
 # Matches tagged client strings in the format [key] = "{tag:value}text"
 reClientTaged = re.compile(r'^\[(.+?)\] = "(\{(?:[CP]:)?\d+\})(.*?)"$')
@@ -106,15 +117,19 @@ previousFileStrings = {}
 translatedFileIndexes = {}
 translatedFileStrings = {}
 
+
 # Helper for escaped chars ----------------------------------------------------
 def get_section_id(section_key):
     return section.section_info.get(section_key, {}).get('sectionId', None)
 
+
 def get_section_name(section_key):
     return section.section_info.get(section_key, {}).get('sectionName', None)
 
+
 def escape_special_characters(text):
     return text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace(r'\\\"', r'\"')
+
 
 def get_section_key_by_id(section_id):
     for key, value in section.section_info.items():
@@ -122,9 +137,9 @@ def get_section_key_by_id(section_id):
             return key
     return None
 
+
 def isTranslatedText(line):
     return any(ord(char) > 127 for char in line)
-
 
 
 # Conversion ------------------------------------------------------------------
@@ -170,15 +185,24 @@ def addIndexToLangFile(txtFilename, idFilename):
         ```
 
     """
-    def readLanguageFileLines(filename, targetList):
-        with open(filename, 'r', encoding="utf8") as textIns:
-            for line in textIns:
-                newstr = line.strip()
-                targetList.append(newstr)
-        return targetList, len(targetList)
+    textLines = []
+    idLines = []
 
-    textLines, textLineCount = readLanguageFileLines(txtFilename, [])
-    idLines, idLineCount = readLanguageFileLines(idFilename, [])
+    # Read text file and count lines
+    textLineCount = 0
+    with open(txtFilename, 'r', encoding="utf8") as textIns:
+        for line in textIns:
+            newstr = line.rstrip()
+            textLines.append(newstr)
+            textLineCount += 1
+
+    # Read identifier file and count lines
+    idLineCount = 0
+    with open(idFilename, 'r', encoding="utf8") as idIns:
+        for line in idIns:
+            newstr = line.strip()
+            idLines.append(newstr)
+            idLineCount += 1
 
     if textLineCount != idLineCount:
         print("Error: Number of lines in text and identifier files do not match. Aborting.")
@@ -475,45 +499,21 @@ def addIndexToEosui(txtFilename):
 
 @mainFunction
 def removeIndexFromEosui(txtFilename):
-    """
-    Remove tags and identifiers from either kr_client.str or kr_pregame.str for use with official release.
-
-    This function reads a target text file containing entries with tags and identifiers and removes these tags and identifiers,
-    resulting in a clean language text file. The output is saved in a new file named 'output.txt'.
-
-    Args:
-        txtFilename (str): The filename of the target text file containing entries with tags and identifiers
-                          (e.g., 'kr_client.str' or 'kr_pregame.str').
-
-    Notes:
-        - The function uses regular expressions to detect and remove tags, identifiers, and empty lines.
-        - Entries containing '[Font:' are skipped, as well as empty lines.
-        - The cleaned entries are written to the output file 'output.txt' in the same directory as the script.
-
-    Example:
-        Given a target text file 'kr_client.str':
-        ```
-        [SI_LOCATION_NAME] = "{C:10207}Gonfalon Bay"
-        ```
-
-        Calling `removeIndexFromEosui('kr_client.str')` will produce an output file 'output.txt':
-        ```
-        [SI_LOCATION_NAME] = "Gonfalon Bay"
-        ```
-
-    """
     textLines = []
 
     with open(txtFilename, 'r', encoding="utf8") as textIns:
         for line in textIns:
             line = line.rstrip()
-            maFontTag = reFontTag.match(line)
-            maClientUntaged = reClientUntaged.match(line)
+            maFontTag = reFontTag.search(line)
+            maClientUntaged = reClientUntaged.search(line)
 
-            if maFontTag or maClientUntaged:
+            if maFontTag or (
+                    maClientUntaged and "{" not in maClientUntaged.group(0) and "}" not in maClientUntaged.group(0)):
                 textLines.append(line + "\n")
+                print("Will continue")
                 continue
 
+            print("maFontTag or maClientUntaged not detected")
             maClientTaged = reClientTaged.match(line)
             if maClientTaged:
                 conIndex = maClientTaged.group(1)
@@ -524,8 +524,6 @@ def removeIndexFromEosui(txtFilename):
     with open("output.txt", 'w', encoding="utf8") as out:
         for lineOut in textLines:
             out.write(lineOut)
-
-
 
 
 def readUInt32(file): return struct.unpack('>I', file.read(4))[0]
@@ -965,8 +963,9 @@ def processEosuiTextFile(filename, text_dict):
     with open(filename, 'r', encoding="utf8") as textIns:
         for line in textIns:
             line = line.rstrip()
-            if reClientUntaged.match(line):
-                conIndex, conText = reClientUntaged.match(line).groups()
+            match = reClientUntaged.match(line)
+            if match:
+                conIndex, _, conText, _ = match.groups()
                 newString = conText.replace(conIndex + " ", "")
                 text_dict[conIndex] = newString
 
@@ -1354,6 +1353,7 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     # Write added indexes
     write_output_file("addedIndexes.txt", addedText, addedIndexCount, 'added')
 
+
 @mainFunction
 def test_section_functions():
     section_key = 'section_unknown_1'
@@ -1367,6 +1367,7 @@ def test_section_functions():
     section_key_found = get_section_key_by_id(section_id_to_find)
 
     print("The sction key found was '{}': using {}".format(section_key_found, section_id_to_find))
+
 
 @mainFunction
 def test_remove_tags():
@@ -1391,6 +1392,7 @@ def test_remove_tags():
             conIndex = match.group(1)
             conText = match.group(3)  # Extract the actual text without the tag
             print('[{}] = "{}"'.format(conIndex, conText))
+
 
 if __name__ == "__main__":
     main()
