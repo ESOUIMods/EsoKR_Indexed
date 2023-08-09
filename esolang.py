@@ -92,10 +92,6 @@ reClientTaged = re.compile(r'^\[(.+?)\] = "(\{(?:[CP]:)?\d+\})(.*?)"$')
 # Matches a font tag in the format [Font:font_name]
 reFontTag = re.compile(r'^\[Font:(.+?)')
 
-reFontTag = re.compile(r'^\[Font:(.+?)')
-reClientUntaged = re.compile(r'^\[(.+?)\] = "(\{(?:[CP]:)?\d+\})?(.*?)"$|^(\[.+?\] = "")$')
-reClientTaged = re.compile(r'^\[(.+?)\] = "(\{(?:[CP]:)?\d+\})(.*?)"$')
-
 # Global Dictionaries ---------------------------------------------------------
 textUntranslatedLiveDict = {}
 textUntranslatedPTSDict = {}
