@@ -1,80 +1,78 @@
 # -*- coding: utf-8 -*-
 #
 import argparse
+import sys
+import os
+import inspect
 import re
 import struct
-import os
-import sys
 import codecs
 from difflib import SequenceMatcher
 from ruamel.yaml.scalarstring import PreservedScalarString
 import ruamel.yaml
 import section_constants as section
 
-
-# ------------------------------------------------------------------------------
-class Callables:
-    def __init__(self):
-        self.callObjs = {}
-
-    def add(self, callObj, callKey=None):
-        callKey = callKey or callObj.__name__
-        self.callObjs[callKey] = callObj
-
-    def printHelp(self, callKey):
-        if callKey in self.callObjs:
-            print(self.callObjs[callKey].__doc__)
-        else:
-            print("Unknown function/object: {}".format(callKey))
-
-    def main(self):
-        callKey, *args = sys.argv[1:]
-
-        if callKey == '-h':
-            self.printHelp(args[0] if args else None)
-            return
-
-        if callKey not in self.callObjs:
-            print("Unknown function/object: {}".format(callKey))
-            return
-
-        callObj = self.callObjs[callKey]
-        if isinstance(callObj, str):
-            callObj = eval(callObj)
-
-        keywords = {}
-        argDex = 0
-        reKeyArg = re.compile(r'^\-(\D\w+)')
-        reKeyBool = re.compile(r'^\+(\D\w+)')
-
-        while argDex < len(args):
-            arg = args[argDex]
-            if reKeyArg.match(arg):
-                keyword = reKeyArg.match(arg).group(1)
-                value = args[argDex + 1]
-                keywords[keyword] = value
-                del args[argDex:argDex + 2]
-            elif reKeyBool.match(arg):
-                keyword = reKeyBool.match(arg).group(1)
-                keywords[keyword] = 1
-                del args[argDex]
-            else:
-                argDex += 1
-
-        if isinstance(callObj, str):
-            callObj = eval(callObj)
-
-        callObj(*args, **keywords)  # Use **keywords here
-
-
-# Callables Singleton
-callables = Callables()
+# List to hold information about callable functions
+callable_functions = []
 
 
 def mainFunction(func):
-    """A function for adding functions to callables."""
-    callables.add(func)
+    """Decorator to mark functions as callable and add them to the list."""
+    callable_functions.append(func)
     return func
+
+
+def print_help():
+    print("Available callable functions:")
+    for func in callable_functions:
+        print("- {}: {}".format(func.__name__, func.__doc__))
+
+
+def print_docstrings():
+    print("Docstrings for callable functions:")
+    for func in callable_functions:
+        print("\nFunction: {}".format(func.__name__))
+        docstring = inspect.getdoc(func)
+        if docstring:
+            print(docstring)
+        else:
+            print("No docstring available.")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="A script to perform various operations on text files.")
+    parser.add_argument("--help-functions", action="store_true", help="Print available functions and their docstrings.")
+    parser.add_argument("--list-functions", action="store_true", help="List available functions without docstrings.")
+    parser.add_argument("--usage", action="store_true", help="Display usage information.")
+    parser.add_argument("function", nargs="?", help="The name of the function to execute.")
+    parser.add_argument("args", nargs=argparse.REMAINDER, help="Arguments for the function.")
+
+    args = parser.parse_args()
+
+    if args.usage:
+        print("Usage: esokr.py function [args [args ...]]")
+        print("       esokr.py --help-functions, or help")
+        print("       esokr.py --list-functions, or list")
+    elif args.help_functions or args.function == "help":
+        print_docstrings()
+    elif args.list_functions or args.function == "list":
+        print("Available functions:")
+        for func in callable_functions:
+            print(func.__name__)
+    elif args.function:
+        function_name = args.function
+        for func in callable_functions:
+            if func.__name__ == function_name:
+                func_args = args.args
+                if func == addIndexToLangFile and len(func_args) < 2:
+                    print("Usage: {} <txtFilename> <idFilename>".format(func.__name__))
+                else:
+                    func(*func_args)
+                break
+        else:
+            print("Unknown function: {}".format(function_name))
+    else:
+        print("No command provided.")
 
 
 # Helper for escaped chars ----------------------------------------------------
@@ -703,54 +701,6 @@ def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
     out.close()
 
 
-@mainFunction
-def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
-    """Untested: Merges either kb.lang or kr.lang with updated translations for current live server files."""
-    reLangConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
-
-    def isTranslatedText(line):
-        for char in range(0, len(line)):
-            returnedBytes = bytes(line[char], 'utf-8')
-            length = len(returnedBytes)
-            if length > 1: return True
-        return None
-
-    textTranslatedDict = {}
-    textUntranslatedDict = {}
-    # Get ID numbers ------------------------------------------------------
-    textIns = open(translatedFilename, 'r', encoding="utf8")
-    for line in textIns:
-        maConstantText = reLangConstantTag.match(line)
-        conIndex = maConstantText.group(1)
-        conText = maConstantText.group(2)
-        textTranslatedDict[conIndex] = conText
-    textIns.close()
-    textIns = open(unTranslatedFilename, 'r', encoding="utf8")
-    for line in textIns:
-        maConstantText = reLangConstantTag.match(line)
-        conIndex = maConstantText.group(1)
-        conText = maConstantText.group(2)
-        textUntranslatedDict[conIndex] = conText
-    textIns.close()
-    # --Write Output ------------------------------------------------------
-    out = open("output.txt", 'w', encoding="utf8")
-    for key in textUntranslatedDict:
-        conText = None
-        if textTranslatedDict.get(key) is None:
-            conText = textUntranslatedDict[key]
-            lineOut = '{{{{{}:}}}}{}\n'.format(key, conText.rstrip())
-            out.write(lineOut)
-            continue
-        if textTranslatedDict.get(key) is not None:
-            if isTranslatedText(textTranslatedDict.get(key)):
-                conText = textTranslatedDict[key]
-        if not conText:
-            conText = textUntranslatedDict[key]
-        lineOut = '{{{{{}:}}}}{}\n'.format(key, conText)
-        out.write(lineOut)
-    out.close()
-
-
 textUntranslatedLiveDict = {}
 textUntranslatedPTSDict = {}
 textTranslatedDict = {}
@@ -799,6 +749,54 @@ def calculate_similarity_and_threshold(text1, text2):
     similarity_ratio = SequenceMatcher(None, subText1, subText2).ratio()
 
     return text1 == text2 or similarity_ratio > 0.6
+
+
+@mainFunction
+def mergeCurrentLangText(translatedFilename, unTranslatedFilename):
+    """Untested: Merges either kb.lang or kr.lang with updated translations for current live server files."""
+    reLangConstantTag = re.compile(r'^\{\{(.+?):\}\}(.+?)$')
+
+    def isTranslatedText(line):
+        for char in range(0, len(line)):
+            returnedBytes = bytes(line[char], 'utf-8')
+            length = len(returnedBytes)
+            if length > 1: return True
+        return None
+
+    textTranslatedDict = {}
+    textUntranslatedDict = {}
+    # Get ID numbers ------------------------------------------------------
+    textIns = open(translatedFilename, 'r', encoding="utf8")
+    for line in textIns:
+        maConstantText = reLangConstantTag.match(line)
+        conIndex = maConstantText.group(1)
+        conText = maConstantText.group(2)
+        textTranslatedDict[conIndex] = conText
+    textIns.close()
+    textIns = open(unTranslatedFilename, 'r', encoding="utf8")
+    for line in textIns:
+        maConstantText = reLangConstantTag.match(line)
+        conIndex = maConstantText.group(1)
+        conText = maConstantText.group(2)
+        textUntranslatedDict[conIndex] = conText
+    textIns.close()
+    # --Write Output ------------------------------------------------------
+    out = open("output.txt", 'w', encoding="utf8")
+    for key in textUntranslatedDict:
+        conText = None
+        if textTranslatedDict.get(key) is None:
+            conText = textUntranslatedDict[key]
+            lineOut = '{{{{{}:}}}}{}\n'.format(key, conText.rstrip())
+            out.write(lineOut)
+            continue
+        if textTranslatedDict.get(key) is not None:
+            if isTranslatedText(textTranslatedDict.get(key)):
+                conText = textTranslatedDict[key]
+        if not conText:
+            conText = textUntranslatedDict[key]
+        lineOut = '{{{{{}:}}}}{}\n'.format(key, conText)
+        out.write(lineOut)
+    out.close()
 
 
 @mainFunction
@@ -1017,12 +1015,13 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
 
     Notes:
         The function reads the translation data from the specified files using the 'readTaggedLangFile' function.
-        The analysis results are categorized into 'matched', 'close match', 'changed', and 'deleted' indexes.
+        The analysis results are categorized into 'matched', 'close match', 'changed', 'added', and 'deleted' indexes.
         Output is written to various output files for further review and analysis.
 
     The function performs the following steps:
     - Reads translation data from the specified files into dictionaries.
-    - Compares translations between PTS and live texts, categorizing indexes as 'matched', 'close match', or 'changed'.
+    - Compares translations between PTS and live texts, categorizing indexes as 'matched', 'close match', 'changed',
+      'added', or 'deleted'.
     - Identifies and categorizes new and deleted indexes.
     - Writes analysis results to separate output files.
 
@@ -1032,6 +1031,7 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     - 'closeMatchPtsIndexes.txt': Corresponding PTS translations for 'closeMatchLiveIndexes.txt'.
     - 'changedIndexes.txt': Indexes with changed translations between PTS and live versions.
     - 'deletedIndexes.txt': Indexes present in the live version but absent in the PTS version.
+    - 'addedIndexes.txt': Indexes that are newly added in the PTS version.
     """
     # Get Previous/Live English Text ------------------------------------------------------
     readTaggedLangFile(LiveFilename, textUntranslatedLiveDict)
@@ -1098,4 +1098,4 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
 
 
 if __name__ == "__main__":
-    callables.main()
+    main()
