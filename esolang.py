@@ -477,19 +477,19 @@ def addIndexToEosui(txtFilename):
         for indexCount, line in enumerate(textIns, start=1):
             maFontTag = reFontTag.match(line)
             maClientUntaged = reClientUntaged.match(line)
-            conIndex = ""
-            conText = ""
-
             if maFontTag:
                 textLines.append(line)
                 continue
             elif maClientUntaged:
-                conIndex = maClientUntaged.group(1) or maClientUntaged.group(3)
-                conText = maClientUntaged.group(4) or ""  # Use group 4 for the text content
-                if conIndex not in no_prefix_indexes:
-                    lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, indexPrefix + str(indexCount), conText)
+                conIndex = maClientUntaged.group(1)  # Key (conIndex)
+                conText = maClientUntaged.group(3) if maClientUntaged.group(3) is not None else maClientUntaged.group(4)  # Text content
+                if conText:
+                    if conIndex in no_prefix_indexes:
+                        lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
+                    else:
+                        lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, indexPrefix + str(indexCount), conText)
                 else:
-                    lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
+                    lineOut = '[{}] = ""\n'.format(conIndex)
                 textLines.append(lineOut)
 
     with open("output.txt", 'w', encoding="utf8") as out:
@@ -499,6 +499,33 @@ def addIndexToEosui(txtFilename):
 
 @mainFunction
 def removeIndexFromEosui(txtFilename):
+    """
+    Remove tags and identifiers from either kr_client.str or kr_pregame.str for use with official release.
+
+    This function reads a target text file containing entries with tags and identifiers and removes these tags and identifiers,
+    resulting in a clean language text file. The output is saved in a new file named 'output.txt'.
+
+    Args:
+        txtFilename (str): The filename of the target text file containing entries with tags and identifiers
+                          (e.g., 'kr_client.str' or 'kr_pregame.str').
+
+    Notes:
+        - The function uses regular expressions to detect and remove tags, identifiers, and empty lines.
+        - Entries containing '[Font:' are skipped, as well as empty lines.
+        - The cleaned entries are written to the output file 'output.txt' in the same directory as the script.
+
+    Example:
+        Given a target text file 'kr_client.str':
+        ```
+        [SI_LOCATION_NAME] = "{C:10207}Gonfalon Bay"
+        ```
+
+        Calling `removeIndexFromEosui('kr_client.str')` will produce an output file 'output.txt':
+        ```
+        [SI_LOCATION_NAME] = "Gonfalon Bay"
+        ```
+
+    """
     textLines = []
 
     with open(txtFilename, 'r', encoding="utf8") as textIns:
@@ -507,13 +534,10 @@ def removeIndexFromEosui(txtFilename):
             maFontTag = reFontTag.search(line)
             maClientUntaged = reClientUntaged.search(line)
 
-            if maFontTag or (
-                    maClientUntaged and "{" not in maClientUntaged.group(0) and "}" not in maClientUntaged.group(0)):
+            if maFontTag or maClientUntaged:
                 textLines.append(line + "\n")
-                print("Will continue")
                 continue
 
-            print("maFontTag or maClientUntaged not detected")
             maClientTaged = reClientTaged.match(line)
             if maClientTaged:
                 conIndex = maClientTaged.group(1)
@@ -1395,10 +1419,34 @@ def test_remove_tags():
 
 @mainFunction
 def test_add_tags():
+    reFontTag = re.compile(r'^\[Font:(.+?)')
+    reClientUntaged = re.compile(r'^\[(.+?)\] = "(?!.*[{}])((?:[CP]:)?\d+)?(.*?)"$|^(\[.+?\] = "")$')
+
+    no_prefix_indexes = [
+        "SI_PLAYER_NAME",
+        "SI_PLAYER_NAME_WITH_TITLE_FORMAT",
+        "SI_MEGASERVER0",
+        "SI_MEGASERVER1",
+        "SI_MEGASERVER2",
+        "SI_KEYBINDINGS_LAYER_BATTLEGROUNDS",
+        "SI_KEYBINDINGS_LAYER_DIALOG",
+        "SI_KEYBINDINGS_LAYER_GENERAL",
+        "SI_KEYBINDINGS_LAYER_HOUSING_EDITOR",
+        "SI_KEYBINDINGS_LAYER_HOUSING_EDITOR_PLACEMENT_MODE",
+        "SI_KEYBINDINGS_LAYER_HUD_HOUSING",
+        "SI_KEYBINDINGS_LAYER_INSTANCE_KICK_WARNING",
+        "SI_KEYBINDINGS_LAYER_NOTIFICATIONS",
+        "SI_KEYBINDINGS_LAYER_SIEGE",
+        "SI_KEYBINDINGS_LAYER_USER_INTERFACE_SHORTCUTS",
+        "SI_KEYBINDINGS_LAYER_UTILITY_WHEEL"
+    ]
+
     test_strings = [
+        '[Font:ZoFontAlert] = "EsoKR/fonts/univers47.otf|24|soft-shadow-thick"',
         '[SI_ABANDON_QUEST_CONFIRM] = "Abandon"',
         '[SI_LOCATION_NAME] = "Gonfalon Bay"',
-        '[SI_ADDONLOADSTATE1] = ""'
+        '[SI_ADDONLOADSTATE1] = ""',
+        '[SI_PLAYER_NAME] = "<<1>>"',
     ]
 
     indexPrefix = ""
@@ -1411,20 +1459,27 @@ def test_add_tags():
 
     print("Using reClientUntaged:")
     for count, string in enumerate(test_strings, start=1):
-        match = reClientUntaged.match(string)
-        if match:
-            conIndex = match.group(1)  # Key (conIndex)
-            conText = match.group(3) if match.group(3) is not None else match.group(4)  # Text content
+        maFontTag = reFontTag.match(string)
+        maClientUntaged = reClientUntaged.match(string)
+        if maFontTag:
+            print(string)
+            continue
+        elif maClientUntaged:
+            conIndex = maClientUntaged.group(1)  # Key (conIndex)
+            conText = maClientUntaged.group(3) if maClientUntaged.group(3) is not None else maClientUntaged.group(4)  # Text content
             if conText:
-                newString = '[{}] = "{{{}}}{}"'.format(conIndex, indexPrefix + str(count), conText)
+                if conIndex in no_prefix_indexes:
+                    newString = '[{}] = "{}"'.format(conIndex, conText)
+                else:
+                    newString = '[{}] = "{{{}}}{}"'.format(conIndex, indexPrefix + str(count), conText)
             else:
                 newString = '[{}] = ""'.format(conIndex)
             print("String #{}:".format(count))
-            print("Group 0:", match.group(0))
-            print("Group 1:", match.group(1))
-            print("Group 2:", match.group(2))
-            print("Group 3:", match.group(3))
-            print("Group 4:", match.group(4))
+            print("Group 0:", maClientUntaged.group(0))
+            print("Group 1:", maClientUntaged.group(1))
+            print("Group 2:", maClientUntaged.group(2))
+            print("Group 3:", maClientUntaged.group(3))
+            print("Group 4:", maClientUntaged.group(4))
             print("conIndex:", conIndex)
             print("conText:", conText)
             print(newString)
