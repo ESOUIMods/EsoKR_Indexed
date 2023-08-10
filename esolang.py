@@ -78,14 +78,17 @@ def main():
 # Regular Expressions for Text Processing -------------------------------------
 """
 Here's a breakdown of how the reClientUntaged expression works:
-^                  # Start of the line
-\[                 # Match an opening square bracket '['
-(.+?)              # Capture group 1: Match and capture any characters (the key/index)
-\] = "             # Match a closing square bracket ']' followed by space, equals sign '=', and double quote '"'
-(?!.*{[CP]:)       # Negative lookahead: Assert that there is no '{C:' or '{P:' in the string
-(.*?)              # Capture group 2: Match and capture any characters (the text value)
-"                  # Match double quote '"'
-$                  # End of the line
+^: Anchors the start of the string.
+\[(.+?)\]: Matches a string enclosed in square brackets and captures the content
+ inside the brackets as group 1 (.*?). The (.+?) is a non-greedy match for any 
+ characters within the brackets.
+= ": Matches the space, equals sign, and double quotation mark that follow the square brackets.
+(?!.*{[CP]:): A negative lookahead assertion that checks that the text ahead does 
+ not contain either {C: or {P:. This ensures that the text within the double 
+ quotation marks is not tagged as a language constant.
+(.*?): Captures the text between the double quotation marks as group 2 (.*?).
+": Matches the closing double quotation mark.
+$: Anchors the end of the string.
 """
 
 # Matches a language index in the format {{identifier:}}text
@@ -98,13 +101,13 @@ reLangIndexOld = re.compile(r'^(\d{1,10}-\d{1,7}-\d{1,7}) (.+)$')
 reClientUntaged = re.compile(r'^\[(.+?)\] = "(?!.*{[CP]:)(.*?)"$')
 
 # Matches tagged client strings in the format [key] = "{tag:value}text"
-reClientTaged = re.compile(r'^\[(.+?)\] = "(?!.*[{])(?!.*{\d)(.*?)"$')
+reClientTaged = re.compile(r'^\[(.+?)\] = "(\{[CP]:.+?\})(.+?)"$')
 
 # Matches empty client strings in the format [key] = ""
 reEmptyString = re.compile(r'^\[(.+?)\] = ""$')
 
 # Matches a font tag in the format [Font:font_name]
-reFontTag = re.compile(r'^\[Font:(.+?)')
+reFontTag = re.compile(r'^\[Font:(.+?)\] = "(.+?)"')
 
 # Global Dictionaries ---------------------------------------------------------
 textUntranslatedLiveDict = {}
@@ -130,15 +133,15 @@ def get_section_name(section_key):
     return section.section_info.get(section_key, {}).get('sectionName', None)
 
 
-def escape_special_characters(text):
-    return text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace(r'\\\"', r'\"')
-
-
 def get_section_key_by_id(section_id):
     for key, value in section.section_info.items():
         if value['sectionId'] == section_id:
             return key
     return None
+
+
+def escape_special_characters(text):
+    return text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace(r'\\\"', r'\"')
 
 
 def isTranslatedText(line):
@@ -491,8 +494,8 @@ def addIndexToEosui(txtFilename):
                 textLines.append(lineOut)
             elif maClientUntaged:
                 conIndex = maClientUntaged.group(1)  # Key (conIndex)
-                conText = maClientUntaged.group(2)  # Text content
-                if conIndex not in no_prefix_indexes:
+                conText = maClientUntaged.group(2) if maClientUntaged.group(2) is not None else ''
+                if conIndex not in no_prefix_indexes and maClientUntaged.group(2) is not None:
                     lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, indexPrefix + str(indexCount), conText)
                 else:
                     lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
@@ -547,7 +550,7 @@ def removeIndexFromEosui(txtFilename):
             maClientTaged = reClientTaged.match(line)
             if maClientTaged:
                 conIndex = maClientTaged.group(1)
-                conText = maClientTaged.group(3) if maClientTaged.group(3) is not None else maClientTaged.group(4)
+                conText = maClientTaged.group(3)
                 lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
                 textLines.append(lineOut)
 
@@ -789,10 +792,10 @@ def combineClientFiles(client_filename, pregame_filename):
             conText = ''
         elif maClientUntaged:
             conIndex = maClientUntaged.group(1)  # Key (conIndex)
-            conText = maClientUntaged.group(2)  # Text content
+            conText = maClientUntaged.group(2) if maClientUntaged.group(2) is not None else ''
         return conIndex, conText
 
-    def add_line(line, conIndex, conText):
+    def add_line(conIndex, conText):
         if conIndex not in conIndex_set:
             escaped_conText = escape_special_characters(conText)
             textLines.append('[{}] = "{}"\n'.format(conIndex, escaped_conText))
@@ -804,7 +807,7 @@ def combineClientFiles(client_filename, pregame_filename):
                 line = line.rstrip()
                 if line.startswith("["):
                     conIndex, conText = extract_constant(line)
-                    add_line(line, conIndex, conText)
+                    add_line(conIndex, conText)
                 else:
                     textLines.append(line + "\n")
 
@@ -877,15 +880,15 @@ def createWeblateFile(input_filename, langValue, langTag):
         with open(input_filename, 'r', encoding="utf8") as textIns:
             translations = {}
             for line in textIns:
-                maClientUntaged = reClientUntaged.match(line)
                 maEmptyString = reEmptyString.match(line)
-                if maClientUntaged:
-                    conIndex = maClientUntaged.group(1)  # Key (conIndex)
-                    conText = maClientUntaged.group(2)  # Text content
-                    translations[conIndex] = conText
-                elif maEmptyString:
+                maClientUntaged = reClientUntaged.match(line)
+                if maEmptyString:
                     conIndex = maEmptyString.group(1)  # Key (conIndex)
                     conText = ''
+                    translations[conIndex] = conText
+                elif maClientUntaged:
+                    conIndex = maClientUntaged.group(1)  # Key (conIndex)
+                    conText = maClientUntaged.group(2) if maClientUntaged.group(2) is not None else ''
                     translations[conIndex] = conText
     except FileNotFoundError:
         print("{} not found. Aborting.".format(input_filename))
@@ -965,16 +968,17 @@ def importClientTranslations(inputYaml, inputClientFile, langValue):
     # Update translations from the inputClientFile
     with open(inputClientFile, 'r', encoding="utf8") as textIns:
         for line in textIns:
-            maClientUntaged = reClientUntaged.match(line)
             maEmptyString = reEmptyString.match(line)
-            if maClientUntaged:
-                conIndex, conText = maClientUntaged.groups()
-                if conIndex in translations and conText != translations[conIndex]['english']:
-                    translations[conIndex][langValue] = conText  # Update the specified language
-            elif maEmptyString:
+            maClientUntaged = reClientUntaged.match(line)
+            if maEmptyString:
                 conIndex = maEmptyString.group(1)
                 conText = ''
                 translations[conIndex][langValue] = conText
+            elif maClientUntaged:
+                conIndex = maClientUntaged.group(1)  # Key (conIndex)
+                conText = maClientUntaged.group(2) if maClientUntaged.group(2) is not None else ''
+                if conIndex in translations and conText != translations[conIndex]['english']:
+                    translations[conIndex][langValue] = conText  # Update the specified language
 
     # Generate the updated YAML-like output with double-quoted scalars and preserved formatting
     output_filename = os.path.splitext(inputYaml)[0] + "_updated.yaml"
@@ -1006,16 +1010,16 @@ def processEosuiTextFile(filename, text_dict):
     with open(filename, 'r', encoding="utf8") as textIns:
         for line in textIns:
             line = line.rstrip()
-            maClientUntaged = reClientUntaged.match(line)
             maEmptyString = reEmptyString.match(line)
+            maClientUntaged = reClientUntaged.match(line)
 
-            if maClientUntaged:
-                conIndex, conText = maClientUntaged.groups()
-                newString = conText.replace(conIndex + " ", "")
-                text_dict[conIndex] = newString
-            elif maEmptyString:
+            if maEmptyString:
                 conIndex = maEmptyString.group(1)
                 conText = ""
+                text_dict[conIndex] = conText
+            elif maClientUntaged:
+                conIndex = maClientUntaged.group(1)  # Key (conIndex)
+                conText = maClientUntaged.group(2) if maClientUntaged.group(2) is not None else ''
                 text_dict[conIndex] = conText
 
 
@@ -1427,6 +1431,7 @@ test_strings = [
     '[SI_INTERACT_PROMPT_FORMAT_UNIT_NAME] = "<<C:1>>"',
     '[SI_INTERACT_PROMPT_FORMAT_REMOTE_COMPANIONS_NAME] = "<<1>>''s <<2{Companion/Companion}>>"',
     '[SI_INTERACT_PROMPT_FORMAT_UNIT_NAME_TAGGED] = "{C:5327}<<C:1>>"',
+    '[SI_ACTIONRESULT3410] = "{P:117}You can''t weapon swap while changing gear."',
 ]
 
 
@@ -1434,27 +1439,30 @@ test_strings = [
 def test_remove_tags():
     print("Using reClientUntaged:")
     for string in test_strings:
-        match = reClientUntaged.match(string)
-        if match:
-            conIndex = match.group(1)
-            conText = match.group(3) if match.group(3) is not None else match.group(4)  # Handle empty string
+        maClientUntaged = reClientUntaged.match(string)
+        if maClientUntaged:
+            conIndex = maClientUntaged.group(1)
+            conText = maClientUntaged.group(2) if maClientUntaged.group(2) is not None else ''  # Handle empty string
             print('[{}] = "{}"'.format(conIndex, conText))
 
     print("\nUsing reClientTaged:")
     for string in test_strings:
-        match = reClientTaged.match(string)
-        if match:
-            conIndex = match.group(1)
-            conText = match.group(3)  # Extract the actual text without the tag
+        maClientTaged = reClientTaged.match(string)
+        if maClientTaged:
+            conIndex = maClientTaged.group(1)
+            conText = maClientTaged.group(3)
             print('[{}] = "{}"'.format(conIndex, conText))
+
+    print("\nUsing reEmptyString:")
+    for string in test_strings:
+        maEmptyString = reEmptyString.match(string)
+        if maEmptyString:
+            conIndex = maEmptyString.group(1)
+            print('[{}] = ""'.format(conIndex))
 
 
 @mainFunction
 def test_add_tags():
-    reFontTag = re.compile(r'^\[Font:(.+?)')
-    reClientUntaged = re.compile(r'^\[(.+?)\] = "(?!.*{[CP]:)(.*?)"$')
-    reEmptyString = re.compile(r'^\[(.+?)\] = ""$')
-
     no_prefix_indexes = [
         "SI_PLAYER_NAME",
         "SI_PLAYER_NAME_WITH_TITLE_FORMAT",
@@ -1520,6 +1528,39 @@ def test_add_tags():
             print("conText:", conText)
             print(newString)
             print()
+
+@mainFunction
+def print_groups():
+    for count, string in enumerate(test_strings, start=1):
+        maClientUntaged = reClientUntaged.match(string)
+        maClientTaged = reClientTaged.match(string)
+        maEmptyString = reEmptyString.match(string)
+        maFontTag = reFontTag.match(string)
+
+        print("String #{}: {}".format(count, string))
+
+        if maClientUntaged:
+            print("Using reClientUntaged:")
+            print("Group 0:", maClientUntaged.group(0))
+            print("Group 1:", maClientUntaged.group(1))
+            print("Group 2:", maClientUntaged.group(2))
+        if maClientTaged:
+            print("Using reClientTaged:")
+            print("Group 0:", maClientTaged.group(0))
+            print("Group 1:", maClientTaged.group(1))
+            print("Group 2:", maClientTaged.group(2))
+            print("Group 3:", maClientTaged.group(3))
+        if maEmptyString:
+            print("Using reEmptyString:")
+            print("Group 0:", maEmptyString.group(0))
+            print("Group 1:", maEmptyString.group(1))
+        if maFontTag:
+            print("Using reFontTag:")
+            print("Group 0:", maFontTag.group(0))
+            print("Group 1:", maFontTag.group(1))
+            print("Group 2:", maFontTag.group(2))
+
+        print()
 
 
 if __name__ == "__main__":
