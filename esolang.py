@@ -480,19 +480,22 @@ def addIndexToEosui(txtFilename):
         for indexCount, line in enumerate(textIns, start=1):
             maFontTag = reFontTag.match(line)
             maClientUntaged = reClientUntaged.match(line)
+            maEmptyString = reEmptyString.match(line)
+
             if maFontTag:
                 textLines.append(line)
                 continue
+            elif maEmptyString:
+                conIndex = maEmptyString.group(1)  # Key (conIndex)
+                lineOut = '[{}] = ""\n'.format(conIndex)
+                textLines.append(lineOut)
             elif maClientUntaged:
                 conIndex = maClientUntaged.group(1)  # Key (conIndex)
-                conText = maClientUntaged.group(3) if maClientUntaged.group(3) is not None else maClientUntaged.group(4)  # Text content
-                if conText:
-                    if conIndex in no_prefix_indexes:
-                        lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
-                    else:
-                        lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, indexPrefix + str(indexCount), conText)
+                conText = maClientUntaged.group(2)  # Text content
+                if conIndex not in no_prefix_indexes:
+                    lineOut = '[{}] = "{{{}}}{}"\n'.format(conIndex, indexPrefix + str(indexCount), conText)
                 else:
-                    lineOut = '[{}] = ""\n'.format(conIndex)
+                    lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
                 textLines.append(lineOut)
 
     with open("output.txt", 'w', encoding="utf8") as out:
@@ -535,9 +538,9 @@ def removeIndexFromEosui(txtFilename):
         for line in textIns:
             line = line.rstrip()
             maFontTag = reFontTag.search(line)
-            maClientUntaged = reClientUntaged.search(line)
+            maEmptyString = reEmptyString.search(line)
 
-            if maFontTag or maClientUntaged:
+            if maFontTag or maEmptyString:
                 textLines.append(line + "\n")
                 continue
 
@@ -783,7 +786,7 @@ def combineClientFiles(client_filename, pregame_filename):
         maEmptyString = reEmptyString.match(line)
         if maEmptyString:
             conIndex = maEmptyString.group(1)  # Key (conIndex)
-            conText = '""'
+            conText = ''
         elif maClientUntaged:
             conIndex = maClientUntaged.group(1)  # Key (conIndex)
             conText = maClientUntaged.group(2)  # Text content
@@ -799,7 +802,6 @@ def combineClientFiles(client_filename, pregame_filename):
         with open(filename, 'r', encoding="utf8") as textInsClient:
             for line in textInsClient:
                 line = line.rstrip()
-                print(line)
                 if line.startswith("["):
                     conIndex, conText = extract_constant(line)
                     add_line(line, conIndex, conText)
@@ -876,9 +878,14 @@ def createWeblateFile(input_filename, langValue, langTag):
             translations = {}
             for line in textIns:
                 maClientUntaged = reClientUntaged.match(line)
+                maEmptyString = reEmptyString.match(line)
                 if maClientUntaged:
                     conIndex = maClientUntaged.group(1)  # Key (conIndex)
                     conText = maClientUntaged.group(2)  # Text content
+                    translations[conIndex] = conText
+                elif maEmptyString:
+                    conIndex = maEmptyString.group(1)  # Key (conIndex)
+                    conText = ''
                     translations[conIndex] = conText
     except FileNotFoundError:
         print("{} not found. Aborting.".format(input_filename))
@@ -958,11 +965,16 @@ def importClientTranslations(inputYaml, inputClientFile, langValue):
     # Update translations from the inputClientFile
     with open(inputClientFile, 'r', encoding="utf8") as textIns:
         for line in textIns:
-            match = reClientUntaged.match(line)
-            if match:
-                conIndex, conText = match.groups()
+            maClientUntaged = reClientUntaged.match(line)
+            maEmptyString = reEmptyString.match(line)
+            if maClientUntaged:
+                conIndex, conText = maClientUntaged.groups()
                 if conIndex in translations and conText != translations[conIndex]['english']:
                     translations[conIndex][langValue] = conText  # Update the specified language
+            elif maEmptyString:
+                conIndex = maEmptyString.group(1)
+                conText = ''
+                translations[conIndex][langValue] = conText
 
     # Generate the updated YAML-like output with double-quoted scalars and preserved formatting
     output_filename = os.path.splitext(inputYaml)[0] + "_updated.yaml"
@@ -994,11 +1006,17 @@ def processEosuiTextFile(filename, text_dict):
     with open(filename, 'r', encoding="utf8") as textIns:
         for line in textIns:
             line = line.rstrip()
-            match = reClientUntaged.match(line)
-            if match:
-                conIndex, _, conText, _ = match.groups()
+            maClientUntaged = reClientUntaged.match(line)
+            maEmptyString = reEmptyString.match(line)
+
+            if maClientUntaged:
+                conIndex, conText = maClientUntaged.groups()
                 newString = conText.replace(conIndex + " ", "")
                 text_dict[conIndex] = newString
+            elif maEmptyString:
+                conIndex = maEmptyString.group(1)
+                conText = ""
+                text_dict[conIndex] = conText
 
 
 @mainFunction
@@ -1256,9 +1274,9 @@ def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
             translatedText = textTranslatedDict.get(key)
             liveText = textUntranslatedLiveDict.get(key)
             ptsText = textUntranslatedPTSDict.get(key)
-            maClientUntaged = reClientUntaged.match(ptsText)
-            if maClientUntaged:
-                conIndex, conText = maClientUntaged.groups()
+            maEmptyString = reEmptyString.match(ptsText)
+            if maEmptyString:
+                conIndex = maEmptyString.group(1)
                 lineOut = '[{}] = ""\n'.format(conIndex)
                 out.write(lineOut)
                 continue
@@ -1400,14 +1418,20 @@ def test_section_functions():
     print("The sction key found was '{}': using {}".format(section_key_found, section_id_to_find))
 
 
+test_strings = [
+    '[Font:ZoFontAlert] = "EsoKR/fonts/univers47.otf|24|soft-shadow-thick"',
+    '[SI_ABANDON_QUEST_CONFIRM] = "Abandon"',
+    '[SI_LOCATION_NAME] = "Gonfalon Bay"',
+    '[SI_ADDONLOADSTATE1] = ""',
+    '[SI_PLAYER_NAME] = "<<1>>"',
+    '[SI_INTERACT_PROMPT_FORMAT_UNIT_NAME] = "<<C:1>>"',
+    '[SI_INTERACT_PROMPT_FORMAT_REMOTE_COMPANIONS_NAME] = "<<1>>''s <<2{Companion/Companion}>>"',
+    '[SI_INTERACT_PROMPT_FORMAT_UNIT_NAME_TAGGED] = "{C:5327}<<C:1>>"',
+]
+
+
 @mainFunction
 def test_remove_tags():
-    test_strings = [
-        '[SI_ABANDON_QUEST_CONFIRM] = "{C:7}Abandon"',
-        '[SI_LOCATION_NAME] = "{P:10207}Gonfalon Bay"',
-        '[SI_ADDONLOADSTATE1] = ""'
-    ]
-
     print("Using reClientUntaged:")
     for string in test_strings:
         match = reClientUntaged.match(string)
@@ -1423,6 +1447,7 @@ def test_remove_tags():
             conIndex = match.group(1)
             conText = match.group(3)  # Extract the actual text without the tag
             print('[{}] = "{}"'.format(conIndex, conText))
+
 
 @mainFunction
 def test_add_tags():
@@ -1447,17 +1472,6 @@ def test_add_tags():
         "SI_KEYBINDINGS_LAYER_SIEGE",
         "SI_KEYBINDINGS_LAYER_USER_INTERFACE_SHORTCUTS",
         "SI_KEYBINDINGS_LAYER_UTILITY_WHEEL"
-    ]
-
-    test_strings = [
-        '[Font:ZoFontAlert] = "EsoKR/fonts/univers47.otf|24|soft-shadow-thick"',
-        '[SI_ABANDON_QUEST_CONFIRM] = "Abandon"',
-        '[SI_LOCATION_NAME] = "Gonfalon Bay"',
-        '[SI_ADDONLOADSTATE1] = ""',
-        '[SI_PLAYER_NAME] = "<<1>>"',
-        '[SI_INTERACT_PROMPT_FORMAT_UNIT_NAME] = "<<C:1>>"',
-        '[SI_INTERACT_PROMPT_FORMAT_REMOTE_COMPANIONS_NAME] = "<<1>>''s <<2{Companion/Companion}>>"',
-        '[SI_INTERACT_PROMPT_FORMAT_UNIT_NAME_TAGGED] = "{C:5327}<<C:1>>"',
     ]
 
     indexPrefix = ""
@@ -1506,6 +1520,7 @@ def test_add_tags():
             print("conText:", conText)
             print(newString)
             print()
+
 
 if __name__ == "__main__":
     main()
