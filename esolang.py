@@ -1240,11 +1240,15 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
 
     # Get Previous Translation ------------------------------------------------------
     readTaggedLangFile(translatedFilename, textTranslatedDict)
+    print("Processed Translated Text")
     # Get Previous/Live English Text ------------------------------------------------------
     readTaggedLangFile(unTranslatedLiveFilename, textUntranslatedLiveDict)
+    print("Processed Previous Text")
     # Get Current/PTS English Text ------------------------------------------------------
     readTaggedLangFile(unTranslatedPTSFilename, textUntranslatedPTSDict)
+    print("Processed Current Text")
     # Compare PTS with Live text, write output -----------------------------------------
+    print("Begining Comparison")
     with open("output.txt", 'w', encoding="utf8") as out:
         with open("verify_output.txt", 'w', encoding="utf8") as verifyOut:
             for key in textUntranslatedPTSDict:
