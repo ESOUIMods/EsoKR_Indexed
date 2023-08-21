@@ -152,6 +152,8 @@ def escape_special_characters(text):
 
 
 def isTranslatedText(line):
+    if line is None:
+        return False
     return any(ord(char) > 127 for char in line)
 
 
@@ -1314,11 +1316,11 @@ def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
 
     """
     # Read translated text ----------------------------------------------------
-    readTaggedLangFile(translatedFilename, textTranslatedDict)
+    processEosuiTextFile(translatedFilename, textTranslatedDict)
     # Read live text ----------------------------------------------------
-    readTaggedLangFile(liveFilename, textUntranslatedLiveDict)
+    processEosuiTextFile(liveFilename, textUntranslatedLiveDict)
     # Read pts text ----------------------------------------------------
-    readTaggedLangFile(ptsFilename, textUntranslatedPTSDict)
+    processEosuiTextFile(ptsFilename, textUntranslatedPTSDict)
     # --Write Output ------------------------------------------------------
     with open("output.txt", 'w', encoding="utf8") as out:
         for key in textUntranslatedPTSDict:
