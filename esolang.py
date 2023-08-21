@@ -744,6 +744,46 @@ def readCurrentLangFile(currentLanguageFile):
     print(currentFileStrings['stringCount'])
     writeLangFile('output.lang', currentFileIndexes, currentFileStrings)
 
+def processSectionIDs(outputFileName, currentFileIndexes):
+    numIndexes = currentFileIndexes['numIndexes']
+    currentSection = None
+    sectionCount = 0
+    with open(outputFileName, 'w') as sectionOut:
+        for index in range(numIndexes):
+            currentIndex = currentFileIndexes[index]
+            sectionId = currentIndex['sectionId']
+            if sectionId != currentSection:
+                sectionCount += 1
+                sectionOut.write('section_unknown_{} = {}\n'.format(sectionCount, sectionId))
+                currentSection = sectionId
+
+@mainFunction
+def extractSectionIDs(currentLanguageFile, outputFileName):
+    """
+    Extract section ID numbers from a language file and write them to an output file.
+
+    This function reads a provided language file, extracts the section ID numbers
+    associated with the strings in the language file, and writes a list of unique
+    section ID numbers to the specified output file.
+
+    Args:
+        currentLanguageFile (str): The name of the current language file to read.
+        outputFileName (str): The name of the output file to write section ID numbers to.
+
+    Note:
+        The extracted section ID numbers are written to the output file in the format:
+        section_unknown_1 = <section_id>
+        section_unknown_2 = <section_id>
+        ...
+
+    Example:
+        Given a language file 'en.lang' containing strings and section ID information,
+        calling extractSectionIDs('en.lang', 'section_ids.txt') will create 'section_ids.txt'
+        with a list of unique section ID numbers.
+
+    """
+    currentFileIndexes, currentFileStrings = readLangFile(currentLanguageFile)
+    processSectionIDs(outputFileName, currentFileIndexes)
 
 @mainFunction
 def combineClientFiles(client_filename, pregame_filename):
