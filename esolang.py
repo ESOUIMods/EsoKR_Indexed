@@ -12,11 +12,11 @@ import ruamel.yaml
 import section_constants as section
 
 """
-From powershell 6.1.7600.16385 you may see question marks rather then the Korean or Chinese text on windows 7. 
-However, running esolang with powershell 7 on windows 10 the docstrings should print correctly. 
+From powershell 6.1.7600.16385 you may see question marks rather then the Korean or Chinese text on windows 7.
+However, running esolang with powershell 7 on windows 10 the docstrings should print correctly.
 On windows 7 in GitBash 2.35.1.2 you may see a UnicodeEncodeError charmap error.
 
-The issue is related to the encoding used when printing Unicode characters in different terminal environments.  
+The issue is related to the encoding used when printing Unicode characters in different terminal environments.
 """
 # List to hold information about callable functions
 callable_functions = []
@@ -87,11 +87,11 @@ def main():
 Here's a breakdown of how the reClientUntaged expression works:
 ^: Anchors the start of the string.
 \[(.+?)\]: Matches a string enclosed in square brackets and captures the content
- inside the brackets as group 1 (.*?). The (.+?) is a non-greedy match for any 
+ inside the brackets as group 1 (.*?). The (.+?) is a non-greedy match for any
  characters within the brackets.
 = ": Matches the space, equals sign, and double quotation mark that follow the square brackets.
-(?!.*{[CP]:): A negative lookahead assertion that checks that the text ahead does 
- not contain either {C: or {P:. This ensures that the text within the double 
+(?!.*{[CP]:): A negative lookahead assertion that checks that the text ahead does
+ not contain either {C: or {P:. This ensures that the text within the double
  quotation marks is not tagged as a language constant.
 (.*?): Captures the text between the double quotation marks as group 2 (.*?).
 ": Matches the closing double quotation mark.
@@ -746,6 +746,7 @@ def readCurrentLangFile(currentLanguageFile):
     print(currentFileStrings['stringCount'])
     writeLangFile('output.lang', currentFileIndexes, currentFileStrings)
 
+
 def processSectionIDs(outputFileName, currentFileIndexes):
     numIndexes = currentFileIndexes['numIndexes']
     currentSection = None
@@ -758,6 +759,7 @@ def processSectionIDs(outputFileName, currentFileIndexes):
                 sectionCount += 1
                 sectionOut.write('section_unknown_{} = {}\n'.format(sectionCount, sectionId))
                 currentSection = sectionId
+
 
 @mainFunction
 def extractSectionIDs(currentLanguageFile, outputFileName):
@@ -786,6 +788,7 @@ def extractSectionIDs(currentLanguageFile, outputFileName):
     """
     currentFileIndexes, currentFileStrings = readLangFile(currentLanguageFile)
     processSectionIDs(outputFileName, currentFileIndexes)
+
 
 @mainFunction
 def combineClientFiles(client_filename, pregame_filename):
@@ -1105,6 +1108,56 @@ def mergeCurrentEosuiText(translatedFilename, unTranslatedFilename):
             conText = textTranslatedDict.get(conIndex, textUntranslatedDict[key])
             lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
             out.write(lineOut)
+
+
+@mainFunction
+def processTranslationFiles(inputYaml, clientStrings, pregameStrings, languageKey):
+    """
+    Process translation files using the provided YAML file and create output files.
+
+    This function reads the client and pregame strings files, processes the translations
+    using the provided YAML file, and generates separate output files for both client and
+    pregame strings with the translated values if available.
+
+    Args:
+        inputYaml (str): The filename of the YAML file containing translations.
+        clientStrings (str): The filename of the client strings file (e.g., tr_client.str).
+        pregameStrings (str): The filename of the pregame strings file (e.g., tr_pregame.str).
+        languageKey (str): The key corresponding to the desired language in the translations.
+
+    Returns:
+        None
+    """
+    if not isinstance(languageKey, str):
+        print("languageKey must be a string. Aborting.")
+        return
+
+    clientStringsDict = {}
+    pregameStringsDict = {}
+    processEosuiTextFile(clientStrings, clientStringsDict)
+    processEosuiTextFile(pregameStrings, pregameStringsDict)
+
+    translations = {}
+    try:
+        with open(inputYaml, 'r', encoding='utf8') as yaml_file:
+            translations = ruamel.yaml.safe_load(yaml_file)
+    except FileNotFoundError:
+        print("{} not found. Aborting.".format(inputYaml))
+        return
+
+    with open('tr_client.output', 'w', encoding='utf8') as client_output_file:
+        for key, value in clientStringsDict.items():
+            output = value
+            if key in translations and languageKey in translations[key]:
+                output = translations[key][languageKey]
+            client_output_file.write('[{}] = "{}"\n'.format(key, output))
+
+    with open('tr_pregame.output', 'w', encoding='utf8') as pregame_output_file:
+        for key, value in pregameStringsDict.items():
+            output = value
+            if key in translations and languageKey in translations[key]:
+                output = translations[key][languageKey]
+            pregame_output_file.write('[{}] = "{}"\n'.format(key, output))
 
 
 def readTaggedLangFile(taggedFile, targetDict):
@@ -1459,6 +1512,7 @@ def diffEnglishLangFiles(LiveFilename, ptsFilename):
     # Write added indexes
     write_output_file("addedIndexes.txt", addedText, addedIndexCount, 'added')
 
+
 @mainFunction
 def apply_byte_offset_to_hangul(input_filename):
     """
@@ -1489,7 +1543,7 @@ def apply_byte_offset_to_hangul(input_filename):
         ```
     """
     output_filename = "output.txt"
-    
+
     with open(input_filename, "r", encoding="utf-8") as input_file:
         input_text = input_file.read()
 
@@ -1504,7 +1558,7 @@ def apply_byte_offset_to_hangul(input_filename):
 
     with open(output_filename, "w", encoding="utf-8") as output_file:
         output_file.write(converted_text)
-        
+
 
 @mainFunction
 def test_section_functions():
@@ -1627,6 +1681,7 @@ def test_add_tags():
             print("conText:", conText)
             print(newString)
             print()
+
 
 @mainFunction
 def print_groups():
