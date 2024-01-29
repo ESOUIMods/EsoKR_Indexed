@@ -563,7 +563,7 @@ def removeIndexFromEosui(txtFilename):
                 conText = maClientTaged.group(3)
                 lineOut = '[{}] = "{}"\n'.format(conIndex, conText)
                 textLines.append(lineOut)
-
+            # When text is present without {P:650} or {C:345}
             if line is not None:
                 if not maFontTag and not maEmptyString and not maClientTaged:
                     textLines.append(line + "\n")
@@ -1747,6 +1747,28 @@ def print_groups():
 
 @mainFunction
 def detect_encoding_for_each_char(inputFile):
+    """
+    This function reads each character from the specified binary file (inputFile)
+    and attempts to detect the encoding of each character individually using the
+    chardet library. It is important to note that this approach is for testing purposes
+    only and is not a definitive method to accurately determine the encoding of each
+    character. Encoding detection is a complex task, and relying on individual characters
+    may lead to inaccurate results.
+
+    Usage:
+    detect_encoding_for_each_char(inputFile)
+
+    Parameters:
+    - inputFile (str): The path to the binary file to be analyzed.
+
+    Note: The results are printed to the console, displaying the character and the
+    detected encoding for each. It is recommended not to use this method as a means
+    to argue or determine the encoding of a string comprehensively.
+
+    Example:
+    detect_encoding_for_each_char("example.bin")
+    """
+
     not_eof = True
     with open(inputFile, 'rb') as textIns:
         while not_eof:
