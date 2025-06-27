@@ -106,10 +106,10 @@ reLangIndex = re.compile(r'^\{\{([^:]+):}}(.+?)$')
 reLangIndexOld = re.compile(r'^(\d{1,10}-\d{1,7}-\d{1,7}) (.+)$')
 
 # Matches untagged client strings or empty lines in the format [key] = "value" or [key] = ""
-reClientUntaged = re.compile(r'^\[(.+?)\] = "(?!.*{[CP]:)(.*?)"$')
+reClientUntaged = re.compile(r'^\[(.+?)\] = "(?!.*\{[CP]:)((?:[^"\\]|\\.)*)"$')
 
 # Matches tagged client strings in the format [key] = "{tag:value}text"
-reClientTaged = re.compile(r'^\[(.+?)\] = "(\{[CP]:.+?\})(.+?)"$')
+reClientTaged = re.compile(r'^\[(.+?)\] = "(\{[CP]:.+?\})((?:[^"\\]|\\.)*)"$')
 
 # Matches empty client strings in the format [key] = ""
 reEmptyString = re.compile(r'^\[(.+?)\] = ""$')
@@ -158,8 +158,14 @@ def isTranslatedText(line):
     return any(ord(char) > 127 for char in line)
 
 
+# Read and write binary structs
+def readUInt32(file): return struct.unpack('>I', file.read(4))[0]
+
+
+def writeUInt32(file, value): file.write(struct.pack('>I', value))
+
+
 # Conversion ------------------------------------------------------------------
-# (txtFilename, idFilename)
 @mainFunction
 def addIndexToLangFile(txtFilename, idFilename):
     """
@@ -597,12 +603,6 @@ def removeIndexFromEosui(txtFilename):
             out.write(lineOut)
 
 
-def readUInt32(file): return struct.unpack('>I', file.read(4))[0]
-
-
-def writeUInt32(file, value): file.write(struct.pack('>I', value))
-
-
 def readNullStringByChar(offset, start, file):
     """Reads one byte and any subsequent bytes of a multi byte sequence."""
     nullChar = False
@@ -786,8 +786,11 @@ def processSectionIDs(outputFileName, currentFileIndexes):
             sectionId = currentIndex['sectionId']
             if sectionId != currentSection:
                 sectionCount += 1
-                sectionOut.write("    'section_unknown_{}': {{'sectionId': {}, 'sectionName': 'section_unknown_{}'}},\n".format(sectionCount, sectionId, sectionCount))
+                sectionOut.write(
+                    "    'section_unknown_{}': {{'sectionId': {}, 'sectionName': 'section_unknown_{}'}},\n".format(
+                        sectionCount, sectionId, sectionCount))
                 currentSection = sectionId
+
 
 @mainFunction
 def extractSectionIDs(currentLanguageFile, outputFileName):
@@ -816,6 +819,46 @@ def extractSectionIDs(currentLanguageFile, outputFileName):
     """
     currentFileIndexes, currentFileStrings = readLangFile(currentLanguageFile)
     processSectionIDs(outputFileName, currentFileIndexes)
+
+
+@mainFunction
+def extractSectionEntries(langFile, section):
+    """
+    Extracts all entries from a language file for a specific section (by name or ID).
+
+    Args:
+        langFile (str): The .lang file to read (e.g., en.lang).
+        section (str|int): Either the section name (e.g., "lorebook_names") or numeric section ID (e.g., 3427285).
+
+    Writes:
+        output.txt: A file containing all lines in the format {{sectionId-sectionIndex-stringIndex:}}Text
+    """
+    # Try to resolve name to ID if needed
+    try:
+        section_id = int(section)
+    except ValueError:
+        import section_constants
+        section_info = section_constants.section_info
+        section_id = None
+        if section in section_info:
+            section_id = section_info[section]['sectionId']
+        if section_id is None:
+            print("Error: Unknown section name '%s'" % section)
+            return
+
+    fileIndexes, _ = readLangFile(langFile)
+
+    with open("output.txt", "w", encoding="utf8") as out:
+        for i in range(fileIndexes['numIndexes']):
+            entry = fileIndexes[i]
+            if entry['sectionId'] == section_id:
+                secId = entry['sectionId']
+                secIdx = entry['sectionIndex']
+                strIdx = entry['stringIndex']
+                string = entry['string'].decode("utf8", errors="replace")
+                line = "{{{{{}-{}-{}:}}}}{}\n".format(secId, secIdx, strIdx, string)
+                out.write(line)
+        print("Done. Extracted entries from section {} to output.txt".format(section_id))
 
 
 @mainFunction
@@ -900,6 +943,53 @@ def combineClientFiles(client_filename, pregame_filename):
     with open("output.txt", 'w', encoding="utf8") as out:
         for lineOut in textLines:
             out.write(lineOut)
+
+
+@mainFunction
+def createPoFileFromEsoUI(inputFile, lang="en", outputFile="output.po", isBaseEnglish=False):
+    """
+    Converts a text file of Elder Scrolls Online UI strings (such as client or pregame files) into a .po file.
+
+    Args:
+        inputFile (str): Path to the input .str file containing ESO strings.
+        lang (str): Language code for the output (e.g., "en", "tr", "kr"). Used in comments. Default is "en".
+        outputFile (str): Path to the output .po file. Default is "output.po".
+        isBaseEnglish (bool): If True, the msgstr field will be empty (used for base English files).
+
+    Input format:
+        Lines should follow the structure:
+        [SI_KEY] = "Translated or source string"
+
+    Example line from an English client file:
+        [SI_ABANDON_MAIN_QUEST_FAIL] = "You cannot abandon the main quest."
+
+    Output format:
+        msgctxt "SI_ABANDON_MAIN_QUEST_FAIL"
+        msgid "You cannot abandon the main quest."
+        msgstr ""
+
+    This format is compatible with gettext tools like Weblate and Poedit.
+    """
+    with open(inputFile, 'r', encoding='utf-8') as fin, open(outputFile, 'w', encoding='utf-8') as fout:
+        fout.write('# Language: {}\n\n'.format(lang))
+
+        for line in fin:
+            font_match = reFontTag.match(line)
+            if font_match:
+                continue  # Skip font lines
+
+            match = reClientUntaged.match(line)
+            if match:
+                key = match.group(1)
+                value = match.group(2)
+                value = bytes(value, 'utf-8').decode('unicode_escape')  # Handle escaped sequences
+
+                fout.write('msgctxt "{}"\n'.format(key))
+                fout.write('msgid "{}"\n'.format(value))
+                fout.write('msgstr "{}"\n\n'.format("" if isBaseEnglish else value))
+
+    print("Done. Created .po file: {}".format(outputFile))
+
 
 
 @mainFunction
@@ -1074,6 +1164,65 @@ def importClientTranslations(inputYaml, inputClientFile, langValue):
             updatedFile.write(yaml_text)
 
     print("Updated translations saved to {}.".format(output_filename))
+
+
+@mainFunction
+def createWeblateMonolingualYamls(input_en, input_translated=None, langTag=None, section_name=None):
+    """
+    Generate two monolingual Weblate-compatible YAML files named after section_name.
+
+    Args:
+        input_en (str): Path to the English source file (Lua-style).
+        input_translated (str, optional): Path to the translated file (Lua-style). If None, translation falls back to English.
+        langTag (str): Language code for the translation (e.g., 'kr', 'tr', 'uk'). REQUIRED.
+        section_name (str): YAML top-level key and file prefix (e.g., 'client', 'pregame'). REQUIRED.
+    """
+    import os
+    import re
+
+    if langTag is None:
+        raise ValueError("langTag is required (e.g., 'kr', 'tr').")
+    if section_name is None:
+        raise ValueError("section_name is required (e.g., 'client', 'pregame').")
+
+    def parse_lua_file(path):
+        entries = {}
+        pattern = re.compile(r'^\[(.+?)\] = "(.*)"$')
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                match = pattern.match(line.strip())
+                if match:
+                    key, val = match.groups()
+                    entries[key] = val
+        return entries
+
+    def escape_yaml_string(s):
+        # Escape only double quotes for YAML
+        # Leave \n, \\ and other sequences untouched
+        return s.replace('"', '\\"')
+
+
+    en_data = parse_lua_file(input_en)
+    tr_data = parse_lua_file(input_translated) if input_translated else {}
+
+    out_en_file = "{}.en.yaml".format(section_name)
+    out_tr_file = "{}.{}.yaml".format(section_name, langTag)
+
+    def write_yaml(filepath, data):
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write("{}:\n".format(section_name))
+            for key, val in sorted(data.items()):
+                escaped_val = escape_yaml_string(val)
+                f.write("  {}: \"{}\"\n".format(key, escaped_val))
+
+    write_yaml(out_en_file, en_data)
+
+    merged_tr_data = {key: tr_data.get(key, en_data[key]) for key in en_data}
+    write_yaml(out_tr_file, merged_tr_data)
+
+    print("Wrote Weblate YAML files:")
+    print("  - {}".format(out_en_file))
+    print("  - {}".format(out_tr_file))
 
 
 def processEosuiTextFile(filename, text_dict):
@@ -1394,7 +1543,8 @@ def diffIndexedLangText(translatedFilename, unTranslatedLiveFilename, unTranslat
                 lineOut = '{{{{{}:}}}}{}\n'.format(key, lineOut.rstrip())
                 # -- Save questionable comparison to verify
                 if writeOutput:
-                    verifyOut.write('T{{{{{}:}}}}{}\n'.format(key, translatedText.rstrip()))
+                    if translatedText is not None:
+                        verifyOut.write('T{{{{{}:}}}}{}\n'.format(key, translatedText.rstrip()))
                     verifyOut.write('L{{{{{}:}}}}{}\n'.format(key, liveText.rstrip()))
                     verifyOut.write('P{{{{{}:}}}}{}\n'.format(key, ptsText.rstrip()))
                     verifyOut.write('{{{}}}:{{{}}}\n'.format(liveAndPtsGreaterThanThreshold, lineOut))
@@ -1455,6 +1605,21 @@ def diffEsouiText(translatedFilename, liveFilename, ptsFilename):
 
             if hasTranslation:
                 outputText = translatedText
+
+            # Transformation section
+            outputText = outputText.replace('\\\\', '-=DS=-')          # Preserve escaped backslashes
+            outputText = outputText.replace('\\n', '-=CR=-')           # Preserve newline sequences
+            outputText = re.sub(r'\s+\\$', '-=ELS=-', outputText)
+            outputText = outputText.replace('\\"', '-=DQ=-')           # Preserve escaped quotes
+            outputText = outputText.replace('\\', '')                  # Remove any remaining stray backslashes
+
+            # Restore preserved sequences
+            outputText = outputText.replace('-=DS=-', '\\\\')
+            outputText = outputText.replace('-=CR=-', '\\n')
+            outputText = outputText.replace('-=ELS=-', '')           # Convert special end-line quote
+            outputText = outputText.replace('-=DQ=-', '\\"')
+            # End transformation
+
             lineOut = '[{}] = "{}"\n'.format(key, outputText)
             out.write(lineOut)
 
@@ -1841,7 +2006,8 @@ def detect_encoding_for_each_char(inputFile):
 
             result = chardet.detect(char)
             detected_encoding = result['encoding']
-            print("Character: {}, Detected Encoding: {}".format(char.decode(detected_encoding, 'replace'), detected_encoding))
+            print("Character: {}, Detected Encoding: {}".format(char.decode(detected_encoding, 'replace'),
+                                                                detected_encoding))
 
 
 @mainFunction
